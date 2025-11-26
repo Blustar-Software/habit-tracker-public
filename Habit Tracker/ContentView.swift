@@ -132,21 +132,11 @@ struct ContentView: View {
     @State private var showingBulkDeleteConfirmation = false
     @State private var habitIDsToDelete = Set<UUID>()
     @State private var isEditing = false
+    @State private var showingAddHabitSheet = false // New state for showing the sheet
     
     var body: some View {
         NavigationView {
             VStack {
-                HStack {
-                    TextField("New habit", text: $newHabitName)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                    Button("Add") {
-                        viewModel.addHabit(name: newHabitName)
-                        newHabitName = ""
-                    }
-                    .disabled(newHabitName.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-                .padding()
-                
                 List {
                     if isEditing {
                         ForEach(viewModel.habits) { habit in
@@ -172,6 +162,7 @@ struct ContentView: View {
                                 } else {
                                     selection.insert(habit.id)
                                 }
+                                FeedbackManager.shared.selection()
                             }
                         }
                     } else {
@@ -190,6 +181,7 @@ struct ContentView: View {
                         }
                         .onDelete { indexSet in
                             viewModel.removeHabits(at: indexSet)
+                            FeedbackManager.shared.error()
                         }
                     }
                 }
@@ -200,17 +192,55 @@ struct ContentView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(isEditing ? "Done" : "Edit") {
                         isEditing.toggle()
+                        if !isEditing { // Clear selection when exiting edit mode
+                            selection.removeAll()
+                        }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if isEditing {
-                        Button(role: .destructive) {
-                            habitIDsToDelete = selection
-                            showingBulkDeleteConfirmation = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                    HStack {
+                        if isEditing {
+                            Button(role: .destructive) {
+                                habitIDsToDelete = selection
+                                showingBulkDeleteConfirmation = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            .disabled(selection.isEmpty)
                         }
-                        .disabled(selection.isEmpty)
+                        Button {
+                            showingAddHabitSheet = true
+                        } label: {
+                            Label("Add Habit", systemImage: "plus.circle.fill")
+                        }
+                        .opacity(isEditing ? 0 : 1) // Hide the plus button during edit mode
+                    }
+                }
+            }
+            .sheet(isPresented: $showingAddHabitSheet) {
+                NavigationView {
+                    Form {
+                        TextField("New Habit Name", text: $newHabitName)
+                    }
+                    .navigationTitle("Add New Habit")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Cancel") {
+                                newHabitName = ""
+                                showingAddHabitSheet = false
+                                hideKeyboard()
+                            }
+                        }
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Add") {
+                                viewModel.addHabit(name: newHabitName)
+                                newHabitName = ""
+                                showingAddHabitSheet = false
+                                hideKeyboard()
+                            }
+                            .disabled(newHabitName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
                     }
                 }
             }
@@ -220,24 +250,23 @@ struct ContentView: View {
                     selection.removeAll()
                     habitIDsToDelete.removeAll()
                     isEditing = false // Exit edit mode after deletion
+                    FeedbackManager.shared.error()
                 }
                 Button("Cancel", role: .cancel) {
                     habitIDsToDelete.removeAll()
                 }
             }
         }
-        .onAppear {
-            if !isEditing {
-                selection.removeAll()
-            }
-        }
-        .onChange(of: isEditing) { _, newValue in
-            if !newValue {
-                selection.removeAll()
-            }
-        }
     }
 }
+
+#if canImport(UIKit)
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+#endif
 
 struct HabitDetailView: View {
     let habitId: UUID
@@ -395,10 +424,13 @@ struct HabitDetailView: View {
                                 switch completed {
                                 case nil:
                                     viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: true)
+                                    FeedbackManager.shared.success()
                                 case true:
                                     viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: false)
+                                    FeedbackManager.shared.warning()
                                 case false:
                                     viewModel.removeCompletion(habitId: habit.id, dateString: dateString)
+                                    FeedbackManager.shared.tap()
                                 }
                             }
                     }
@@ -444,22 +476,22 @@ struct HabitDetailView: View {
                 }
             }
         }
-        .alert("Rename Habit", isPresented: $showingRenameAlert) {
+        .alert("Rename Habit - Enter a new name", isPresented: $showingRenameAlert) {
             TextField("Name", text: $renameText)
             Button("Cancel", role: .cancel) { }
             Button("Save") {
                 if let habit = habit {
                     viewModel.renameHabit(id: habit.id, newName: renameText)
+                    FeedbackManager.shared.tap()
                 }
             }
-        } message: {
-            Text("Enter a new name for this habit.")
         }
-        .confirmationDialog("Delete this habit?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+        .confirmationDialog("Delete this habit?", isPresented: $showingDeleteConfirmation) {
             Button("Delete Habit", role: .destructive) {
                 if let habit = habit {
                     viewModel.deleteHabit(id: habit.id)
                     dismiss()
+                    FeedbackManager.shared.error()
                 }
             }
             Button("Cancel", role: .cancel) { }
