@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E7BB9C9A2ED67F740035227C /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = E7BB9C992ED67F740035227C /* CHANGELOG.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		E7BA81772ED5AA1200A3890F /* Habit Tracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Habit Tracker.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E7BB9C992ED67F740035227C /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CHANGELOG.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -32,6 +37,7 @@
 		E7BA816E2ED5AA1200A3890F = {
 			isa = PBXGroup;
 			children = (
+				E7BB9C992ED67F740035227C /* CHANGELOG.md */,
 				E7BA81792ED5AA1200A3890F /* Habit Tracker */,
 				E7BA81782ED5AA1200A3890F /* Products */,
 			);
@@ -109,6 +115,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E7BB9C9A2ED67F740035227C /* CHANGELOG.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
