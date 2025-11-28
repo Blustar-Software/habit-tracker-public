@@ -61,6 +61,11 @@ class HabitViewModel: ObservableObject {
         saveHabits()
     }
     
+    func moveHabits(from source: IndexSet, to destination: Int) {
+        habits.move(fromOffsets: source, toOffset: destination)
+        saveHabits()
+    }
+    
     func markCompletion(habitId: UUID, dateString: String, completed: Bool) {
         if let index = habits.firstIndex(where: { $0.id == habitId }) {
             habits[index].completion[dateString] = completed
@@ -123,6 +128,49 @@ class HabitViewModel: ObservableObject {
         let successes = filtered.filter { $0 == true }.count
         return (Double(successes) / Double(total)) * 100.0
     }
+    
+    // Helper to compute current streak ending today (walks backward day-by-day)
+    func currentStreak(for habit: Habit) -> Int {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.timeZone = TimeZone.current
+        let calendar = Calendar.current
+        var streak = 0
+        
+        let today = calendar.startOfDay(for: Date())
+        let todayKey = df.string(from: today)
+        let todayStatus = isCompleted(habitId: habit.id, dateString: todayKey)
+
+        // If today is marked as failed (red), the streak is 0.
+        if todayStatus == false {
+            return 0
+        }
+
+        // Determine the starting day for the loop.
+        // If today is completed, start from today. Otherwise (if it's unmarked), start from yesterday.
+        var dayToStartFrom: Date
+        if todayStatus == true {
+            dayToStartFrom = today
+        } else { // todayStatus is nil
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else { return 0 }
+            dayToStartFrom = yesterday
+        }
+
+        var currentDay = dayToStartFrom
+        while true {
+            let key = df.string(from: currentDay)
+            if isCompleted(habitId: habit.id, dateString: key) == true {
+                streak += 1
+                // Move to previous day
+                guard let prev = calendar.date(byAdding: .day, value: -1, to: currentDay) else { break }
+                currentDay = prev
+            } else {
+                // Streak is broken if the day is not marked as completed (i.e., it's false or nil).
+                break
+            }
+        }
+        return streak
+    }
 }
 
 struct ContentView: View {
@@ -151,9 +199,24 @@ struct ContentView: View {
                                 
                                 Text(habit.name)
                                 Spacer()
+
+                                let streak = viewModel.currentStreak(for: habit)
+                                let streakColor: Color = (streak == 0) ? .red : .green
+
+                                Text("\(streak > 99 ? "99+" : "\(streak)")")
+                                    .font(.caption)
+                                    .frame(width: 25, height: 25)
+                                    .background(
+                                        Circle()
+                                            .foregroundColor(streakColor)
+                                    )
+                                    .foregroundColor(.white)
+                                    .padding(.trailing, 8)
+
                                 let pct = viewModel.successPercentage(for: habit)
                                 Text(String(format: "%.0f%%", pct))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(pct < 34 ? .red : (pct < 67 ? .yellow : .green))
+                                    .frame(width: 50, alignment: .trailing)
                             }
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -165,6 +228,7 @@ struct ContentView: View {
                                 FeedbackManager.shared.selection()
                             }
                         }
+                        .onMove(perform: viewModel.moveHabits)
                     } else {
                         ForEach(viewModel.habits) { habit in
                             NavigationLink(destination: HabitDetailView(habitId: habit.id)
@@ -173,9 +237,24 @@ struct ContentView: View {
                                 HStack {
                                     Text(habit.name)
                                     Spacer()
+                                    
+                                    let streak = viewModel.currentStreak(for: habit)
+                                    let streakColor: Color = (streak == 0) ? .red : .green
+
+                                    Text("\(streak > 99 ? "99+" : "\(streak)")")
+                                        .font(.caption)
+                                        .frame(width: 25, height: 25)
+                                        .background(
+                                            Circle()
+                                                .foregroundColor(streakColor)
+                                        )
+                                        .foregroundColor(.white)
+                                        .padding(.trailing, 8)
+                                    
                                     let pct = viewModel.successPercentage(for: habit)
                                     Text(String(format: "%.0f%%", pct))
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(pct < 34 ? .red : (pct < 67 ? .yellow : .green))
+                                        .frame(width: 50, alignment: .trailing)
                                 }
                             }
                         }
@@ -183,6 +262,7 @@ struct ContentView: View {
                             viewModel.removeHabits(at: indexSet)
                             FeedbackManager.shared.error()
                         }
+                        .onMove(perform: viewModel.moveHabits)
                     }
                 }
                 .listStyle(PlainListStyle())
@@ -190,30 +270,32 @@ struct ContentView: View {
             .navigationTitle("Habit Tracker")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(isEditing ? "Done" : "Edit") {
-                        isEditing.toggle()
-                        if !isEditing { // Clear selection when exiting edit mode
+                    if isEditing {
+                        Button("Done") {
+                            isEditing.toggle()
                             selection.removeAll()
+                        }
+                    } else {
+                        Button("Edit") {
+                            isEditing.toggle()
                         }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack {
-                        if isEditing {
-                            Button(role: .destructive) {
-                                habitIDsToDelete = selection
-                                showingBulkDeleteConfirmation = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                            .disabled(selection.isEmpty)
+                    if isEditing {
+                        Button(role: .destructive) {
+                            habitIDsToDelete = selection
+                            showingBulkDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
+                        .disabled(selection.isEmpty)
+                    } else {
                         Button {
                             showingAddHabitSheet = true
                         } label: {
                             Label("Add Habit", systemImage: "plus.circle.fill")
                         }
-                        .opacity(isEditing ? 0 : 1) // Hide the plus button during edit mode
                     }
                 }
             }
@@ -324,46 +406,6 @@ struct HabitDetailView: View {
     private var habit: Habit? {
         viewModel.habits.first(where: { $0.id == habitId })
     }
-    
-    // Helper to compute current streak ending today (walks backward day-by-day)
-    private func currentStreak(for habit: Habit) -> Int {
-        let df = dateFormatter
-        var streak = 0
-        
-        let today = calendar.startOfDay(for: Date())
-        let todayKey = df.string(from: today)
-        let todayStatus = viewModel.isCompleted(habitId: habit.id, dateString: todayKey)
-
-        // If today is marked as failed (red), the streak is 0.
-        if todayStatus == false {
-            return 0
-        }
-
-        // Determine the starting day for the loop.
-        // If today is completed, start from today. Otherwise (if it's unmarked), start from yesterday.
-        var dayToStartFrom: Date
-        if todayStatus == true {
-            dayToStartFrom = today
-        } else { // todayStatus is nil
-            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else { return 0 }
-            dayToStartFrom = yesterday
-        }
-
-        var currentDay = dayToStartFrom
-        while true {
-            let key = df.string(from: currentDay)
-            if viewModel.isCompleted(habitId: habit.id, dateString: key) == true {
-                streak += 1
-                // Move to previous day
-                guard let prev = calendar.date(byAdding: .day, value: -1, to: currentDay) else { break }
-                currentDay = prev
-            } else {
-                // Streak is broken if the day is not marked as completed (i.e., it's false or nil).
-                break
-            }
-        }
-        return streak
-    }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -378,12 +420,18 @@ struct HabitDetailView: View {
                     .padding(.top, 4)
                 
                 HStack {
-                    Button(action: { monthOffset -= 1 }) {
+                    Button(action: {
+                        monthOffset -= 1
+                        FeedbackManager.shared.tap()
+                    }) {
                         Image(systemName: "chevron.left")
                     }
                     .buttonStyle(.plain)
                     Spacer()
-                    Button(action: { monthOffset += 1 }) {
+                    Button(action: {
+                        monthOffset += 1
+                        FeedbackManager.shared.tap()
+                    }) {
                         Image(systemName: "chevron.right")
                     }
                     .buttonStyle(.plain)
@@ -420,6 +468,10 @@ struct HabitDetailView: View {
                                     .foregroundColor(color)
                             )
                             .foregroundColor(.white)
+                            .overlay(
+                                Circle()
+                                    .stroke(Calendar.current.isDateInToday(date) ? Color.yellow : Color.clear, lineWidth: 2)
+                            )
                             .onTapGesture {
                                 switch completed {
                                 case nil:
@@ -427,7 +479,7 @@ struct HabitDetailView: View {
                                     FeedbackManager.shared.success()
                                 case true:
                                     viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: false)
-                                    FeedbackManager.shared.warning()
+                                    FeedbackManager.shared.failure()
                                 case false:
                                     viewModel.removeCompletion(habitId: habit.id, dateString: dateString)
                                     FeedbackManager.shared.tap()
@@ -440,7 +492,7 @@ struct HabitDetailView: View {
                 // Stats
                 VStack(alignment: .leading, spacing: 8) {
                     let lifetimePct = viewModel.successPercentage(for: habit)
-                    let streak = currentStreak(for: habit)
+                    let streak = viewModel.currentStreak(for: habit)
 
                     Text("Current Streak: \(streak) day\(streak == 1 ? "" : "s")")
                         .font(.subheadline)
@@ -482,7 +534,6 @@ struct HabitDetailView: View {
             Button("Save") {
                 if let habit = habit {
                     viewModel.renameHabit(id: habit.id, newName: renameText)
-                    FeedbackManager.shared.tap()
                 }
             }
         }
@@ -503,4 +554,3 @@ struct HabitDetailView: View {
 #Preview {
     ContentView()
 }
-

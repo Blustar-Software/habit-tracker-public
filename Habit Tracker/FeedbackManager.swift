@@ -51,22 +51,28 @@ class FeedbackManager {
 
     // MARK: - Sound Feedback
 
-    // A simple, crisp tap sound. Good for selections or confirmations.
-    func playTapSound() {
+    // A neutral, crisp tap sound. Good for selections or confirmations.
+    func playNeutralSound() {
         // System Sound ID 1104: "Tock"
         AudioServicesPlaySystemSound(1104)
     }
     
     // A sound to indicate success.
     func playSuccessSound() {
-        // System Sound ID 1104: A reliable "Tock" sound for success.
-        AudioServicesPlaySystemSound(1104)
+        // System Sound ID 1103: "Tink"
+        AudioServicesPlaySystemSound(1103)
     }
     
     // A sound for warnings or non-critical errors.
     func playWarningSound() {
-        // A subtle warning sound.
-        AudioServicesPlaySystemSound(1053) // oops
+        // System Sound ID 1053: "oops"
+        AudioServicesPlaySystemSound(1053)
+    }
+    
+    // A sound for failure.
+    func playFailureSound() {
+        // System Sound ID 1105: "Tock" (different from 1104)
+        AudioServicesPlaySystemSound(1105)
     }
 
     // A sound for significant actions like deletion.
@@ -86,6 +92,11 @@ class FeedbackManager {
         playWarningSound()
     }
     
+    func failure() {
+        triggerWarning()
+        playFailureSound()
+    }
+    
     func error() {
         triggerError()
         playDeleteSound() // Using a more impactful sound for general errors/deletions
@@ -93,7 +104,7 @@ class FeedbackManager {
     
     func tap() {
         triggerLightImpact()
-        playTapSound()
+        playNeutralSound()
     }
     
     func selection() {

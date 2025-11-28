@@ -1,3 +1,25 @@
+## v0.3.0 – Enhancements and UI/UX Refinements
+
+### Added
+- **Current Day Indicator:** The calendar view now features a yellow ring around the current day for better visibility.
+- **Current Streak Indicator on Main View:** A colored circle displaying the current streak (red for 0, green for >0, "99+" for streaks over 99) has been added to the main habit list. The circles were also enlarged and properly aligned.
+- **Habit Reordering:** Habits on the main view can now be reordered using drag-and-drop.
+
+### Changed
+- **Success Percentage Coloring:** The success percentages on the main view are now color-coded in even thirds: red for 0-33%, yellow for 34-66%, and green for 67-100%.
+- **Sound Feedback:**
+    - Days marked as success now use system sound 1103.
+    - Days marked as unsuccessful now use system sound 1105.
+    - Unmarking a day now uses system sound 1104.
+    - Month navigation buttons also use system sound 1104.
+- **Toolbar Button Transitions:**
+    - The "Edit" / "Done" button in the top-left corner now transitions instantly without a fade.
+    - The trash can button now seamlessly replaces the plus sign button in the top-right corner when entering edit mode.
+
+### Fixed
+- **Streak Calculation Accessibility:** The `currentStreak` function was moved to `HabitViewModel` to resolve scope errors and ensure proper access from `ContentView`.
+- **UI Alignment:** Corrected the alignment of streak circles and success percentages on the main view to ensure consistent vertical positioning.
+
 ## v0.2.0 – Major UI/UX Overhaul and Feature Enhancement
 
 ### Added
