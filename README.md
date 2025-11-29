@@ -20,12 +20,12 @@ Blustar Software values clarity, symbolic design, and purposeful interaction. Ev
 ⸻
 
 Installation
-    1. Clone the repository:
+  1. Clone the repository:
 
 ```git clone https://github.com/Blustar-Software/Habit-Tracker.git```
 
-    2. Open Habit Tracker.xcodeproj in Xcode (15+ recommended).
-    3. Build and run on your device or simulator.
+  2. Open Habit Tracker.xcodeproj in Xcode (15+ recommended).
+  3. Build and run on your device or simulator.
 (Requires a personal Apple developer team for local builds.)
 
 ⸻
