@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E751154F2EDA87B4004F3F2A /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = E751154E2EDA87A4004F3F2A /* README.md */; };
 		E7BB9C9A2ED67F740035227C /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = E7BB9C992ED67F740035227C /* CHANGELOG.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E751154E2EDA87A4004F3F2A /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		E7BA81772ED5AA1200A3890F /* Habit Tracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Habit Tracker.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E7BB9C992ED67F740035227C /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CHANGELOG.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -37,6 +39,7 @@
 		E7BA816E2ED5AA1200A3890F = {
 			isa = PBXGroup;
 			children = (
+				E751154E2EDA87A4004F3F2A /* README.md */,
 				E7BB9C992ED67F740035227C /* CHANGELOG.md */,
 				E7BA81792ED5AA1200A3890F /* Habit Tracker */,
 				E7BA81782ED5AA1200A3890F /* Products */,
@@ -115,6 +118,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E751154F2EDA87B4004F3F2A /* README.md in Resources */,
 				E7BB9C9A2ED67F740035227C /* CHANGELOG.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -269,13 +273,12 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchView;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "Blustar.Habit-Tracker";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.blustarsoftware.habit-tracker";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -305,13 +308,12 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchView;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "Blustar.Habit-Tracker";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.blustarsoftware.habit-tracker";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

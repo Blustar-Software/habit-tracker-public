@@ -3,6 +3,7 @@
 //  Habit Tracker
 //
 //  Created by Blake McCowan on 11/25/25.
+// © Blustar Software. All rights reserved.
 //
 
 import UIKit
