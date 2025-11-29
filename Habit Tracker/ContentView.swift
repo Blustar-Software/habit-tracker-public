@@ -1,4 +1,4 @@
-//
+    //
 //  ContentView.swift
 //  Habit Tracker
 //
@@ -271,16 +271,13 @@ struct ContentView: View {
             .navigationTitle("Habit Tracker")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if isEditing {
-                        Button("Done") {
-                            isEditing.toggle()
+                    Button(isEditing ? "Done" : "Edit") {
+                        isEditing.toggle()
+                        if !isEditing {
                             selection.removeAll()
                         }
-                    } else {
-                        Button("Edit") {
-                            isEditing.toggle()
-                        }
                     }
+                    .id(isEditing)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if isEditing {
@@ -332,8 +329,12 @@ struct ContentView: View {
                     viewModel.deleteHabits(ids: habitIDsToDelete)
                     selection.removeAll()
                     habitIDsToDelete.removeAll()
-                    isEditing = false // Exit edit mode after deletion
                     FeedbackManager.shared.error()
+                    DispatchQueue.main.async {
+                        withAnimation {
+                            isEditing = false // Exit edit mode after deletion
+                        }
+                    }
                 }
                 Button("Cancel", role: .cancel) {
                     habitIDsToDelete.removeAll()
@@ -492,6 +493,7 @@ struct HabitDetailView: View {
                 
                 // Stats
                 VStack(alignment: .leading, spacing: 8) {
+                    Spacer()
                     let lifetimePct = viewModel.successPercentage(for: habit)
                     let streak = viewModel.currentStreak(for: habit)
 
@@ -502,6 +504,7 @@ struct HabitDetailView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal)
                 
                 Spacer()
