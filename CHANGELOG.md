@@ -1,3 +1,14 @@
+## v0.4.0 - $
+
+### Added
+
+### Changed
+- **Implicit skips:** Unmarked days no longer break a streak. If a user intends to skip certain days for the habit, they can simply leave a day unmarked.
+
+### Fixed
+- **Details View statistics section:** The statistics section in the Details View is now stable, sticking to the lower portion of the screen instead of moving around when the view is opened.
+- **Main View edit button:** The background around the edit button in the Main View no longer sticks after bulk habit deletion.
+
 ## v0.3.0 – Enhancements and UI/UX Refinements
 
 ### Added

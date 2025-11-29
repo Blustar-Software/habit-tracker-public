@@ -130,7 +130,7 @@ class HabitViewModel: ObservableObject {
         return (Double(successes) / Double(total)) * 100.0
     }
     
-    // Helper to compute current streak ending today (walks backward day-by-day)
+    // Helper to compute current streak. Unmarked days are ignored, and only unsuccessful days break the streak.
     func currentStreak(for habit: Habit) -> Int {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
@@ -138,38 +138,43 @@ class HabitViewModel: ObservableObject {
         let calendar = Calendar.current
         var streak = 0
         
-        let today = calendar.startOfDay(for: Date())
-        let todayKey = df.string(from: today)
-        let todayStatus = isCompleted(habitId: habit.id, dateString: todayKey)
+        var currentDay = calendar.startOfDay(for: Date())
+        var foundFirstMarkedDay = false
 
-        // If today is marked as failed (red), the streak is 0.
-        if todayStatus == false {
-            return 0
-        }
-
-        // Determine the starting day for the loop.
-        // If today is completed, start from today. Otherwise (if it's unmarked), start from yesterday.
-        var dayToStartFrom: Date
-        if todayStatus == true {
-            dayToStartFrom = today
-        } else { // todayStatus is nil
-            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else { return 0 }
-            dayToStartFrom = yesterday
-        }
-
-        var currentDay = dayToStartFrom
-        while true {
+        // Iterate backwards from today for up to 5 years to find the streak.
+        for _ in 0..<(365 * 5) {
             let key = df.string(from: currentDay)
-            if isCompleted(habitId: habit.id, dateString: key) == true {
-                streak += 1
-                // Move to previous day
-                guard let prev = calendar.date(byAdding: .day, value: -1, to: currentDay) else { break }
-                currentDay = prev
-            } else {
-                // Streak is broken if the day is not marked as completed (i.e., it's false or nil).
-                break
+            let status = isCompleted(habitId: habit.id, dateString: key)
+
+            if let completionStatus = status { // Day is marked (true or false)
+                if !foundFirstMarkedDay {
+                    if completionStatus == false {
+                        // The most recent marked day is a failure. Streak is 0.
+                        return 0
+                    }
+                    // This is the first successful day found. Start the streak.
+                    foundFirstMarkedDay = true
+                    streak = 1
+                } else {
+                    // Already in a streak.
+                    if completionStatus == true {
+                        streak += 1
+                    } else { // completionStatus is false
+                        // Streak is broken by a failure.
+                        break
+                    }
+                }
+            } else { // Day is unmarked (nil)
+                if foundFirstMarkedDay {
+                    // An unmarked day does not break an active streak. Continue.
+                }
+                // If streak hasn't started, just keep looking backwards.
             }
+
+            guard let prevDay = calendar.date(byAdding: .day, value: -1, to: currentDay) else { break }
+            currentDay = prevDay
         }
+        
         return streak
     }
 }
