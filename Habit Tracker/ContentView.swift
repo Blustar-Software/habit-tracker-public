@@ -217,7 +217,6 @@ struct ContentView: View {
                                             .foregroundColor(streakColor)
                                     )
                                     .foregroundColor(.white)
-                                    .padding(.trailing, 8)
 
                                 let pct = viewModel.successPercentage(for: habit)
                                 Text(String(format: "%.0f%%", pct))
@@ -255,7 +254,6 @@ struct ContentView: View {
                                                 .foregroundColor(streakColor)
                                         )
                                         .foregroundColor(.white)
-                                        .padding(.trailing, 8)
                                     
                                     let pct = viewModel.successPercentage(for: habit)
                                     Text(String(format: "%.0f%%", pct))
@@ -282,6 +280,7 @@ struct ContentView: View {
                             selection.removeAll()
                         }
                     }
+                    .disabled(viewModel.habits.isEmpty)
                     .id(isEditing)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -303,31 +302,9 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showingAddHabitSheet) {
-                NavigationView {
-                    Form {
-                        TextField("New Habit Name", text: $newHabitName)
-                    }
-                    .navigationTitle("Add New Habit")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("Cancel") {
-                                newHabitName = ""
-                                showingAddHabitSheet = false
-                                hideKeyboard()
-                            }
-                        }
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Add") {
-                                viewModel.addHabit(name: newHabitName)
-                                newHabitName = ""
-                                showingAddHabitSheet = false
-                                hideKeyboard()
-                            }
-                            .disabled(newHabitName.trimmingCharacters(in: .whitespaces).isEmpty)
-                        }
-                    }
-                }
+                AddHabitView(viewModel: viewModel,
+                             newHabitName: $newHabitName,
+                             isPresented: $showingAddHabitSheet)
             }
             .confirmationDialog("Delete selected habits?", isPresented: $showingBulkDeleteConfirmation, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) {
@@ -341,7 +318,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                Button("Cancel", role: .cancel) {
+                Button(role: .cancel) {
                     habitIDsToDelete.removeAll()
                 }
             }
