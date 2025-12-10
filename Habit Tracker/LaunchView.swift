@@ -10,10 +10,15 @@ import SwiftUI
 
 struct LaunchView: View {
     @State private var isActive = false
+    @ObservedObject var fileManager = HabitFileManager.shared
     
     var body: some View {
         if isActive {
-            ContentView()
+            if fileManager.needsFileSelection {
+                FileSelectionView()
+            } else {
+                ContentView()
+            }
         } else {
             ZStack {
                 // Set your desired background color or image

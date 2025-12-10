@@ -1,4 +1,4 @@
-    //
+//
 //  ContentView.swift
 //  Habit Tracker
 //
@@ -24,7 +24,7 @@ struct Habit: Identifiable, Codable {
 class HabitViewModel: ObservableObject {
     @Published var habits: [Habit] = []
     
-    private let saveKey = "SavedHabits"
+    private let fileManager = HabitFileManager.shared
     
     init() {
         loadHabits()
@@ -89,19 +89,11 @@ class HabitViewModel: ObservableObject {
     }
     
     func loadHabits() {
-        if let data = UserDefaults.standard.data(forKey: saveKey) {
-            if let decoded = try? JSONDecoder().decode([Habit].self, from: data) {
-                habits = decoded
-                return
-            }
-        }
-        habits = []
+        habits = fileManager.loadHabits()
     }
     
     func saveHabits() {
-        if let encoded = try? JSONEncoder().encode(habits) {
-            UserDefaults.standard.set(encoded, forKey: saveKey)
-        }
+        fileManager.saveHabits(habits)
     }
     
     func successPercentage(for habit: Habit) -> Double {
