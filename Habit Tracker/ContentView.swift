@@ -13,11 +13,13 @@ struct Habit: Identifiable, Codable {
     let id: UUID
     let name: String
     var completion: [String: Bool] = [:] // key: date string (e.g., "2025-11-25")
+    var notes: String? = nil
     
-    init(id: UUID = UUID(), name: String, completion: [String: Bool] = [:]) {
+    init(id: UUID = UUID(), name: String, completion: [String: Bool] = [:], notes: String? = nil) {
         self.id = id
         self.name = name
         self.completion = completion
+        self.notes = notes
     }
 }
 
@@ -47,7 +49,12 @@ class HabitViewModel: ObservableObject {
     func renameHabit(id: UUID, newName: String) {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let index = habits.firstIndex(where: { $0.id == id }) else { return }
-        habits[index] = Habit(id: habits[index].id, name: trimmed, completion: habits[index].completion)
+        habits[index] = Habit(
+            id: habits[index].id,
+            name: trimmed,
+            completion: habits[index].completion,
+            notes: habits[index].notes
+        )
         saveHabits()
     }
 
@@ -85,6 +92,19 @@ class HabitViewModel: ObservableObject {
             habits[index].completion.removeValue(forKey: dateString)
             saveHabits()
         }
+    }
+    
+    func updateNotes(id: UUID, notes: String) {
+        guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let updatedNotes: String? = trimmed.isEmpty ? nil : trimmed
+        habits[index] = Habit(
+            id: habits[index].id,
+            name: habits[index].name,
+            completion: habits[index].completion,
+            notes: updatedNotes
+        )
+        saveHabits()
     }
     
     func isCompleted(habitId: UUID, dateString: String) -> Bool? {
@@ -185,6 +205,14 @@ struct ContentView: View {
     @State private var habitIDsToDelete = Set<UUID>()
     @State private var isEditing = false
     @State private var showingAddHabitSheet = false // New state for showing the sheet
+    @State private var showingSwipeDeleteConfirmation = false
+    @State private var pendingDeleteHabitId: UUID?
+    @State private var showingRenameAlert = false
+    @State private var renameHabitId: UUID?
+    @State private var renameText = ""
+    @State private var showingNotesSheet = false
+    @State private var notesHabitId: UUID?
+    @State private var notesText = ""
     
     var body: some View {
         NavigationView {
@@ -203,23 +231,6 @@ struct ContentView: View {
                                 
                                 Text(habit.name)
                                 Spacer()
-
-                                let streak = viewModel.currentStreak(for: habit)
-                                let streakColor: Color = (streak == 0) ? .red : .green
-
-                                Text("\(streak > 99 ? "99+" : "\(streak)")")
-                                    .font(.caption)
-                                    .frame(width: 25, height: 25)
-                                    .background(
-                                        Circle()
-                                            .foregroundColor(streakColor)
-                                    )
-                                    .foregroundColor(.white)
-
-                                let pct = viewModel.successPercentage(for: habit)
-                                Text(String(format: "%.0f%%", pct))
-                                    .foregroundColor(pct < 34 ? .red : (pct < 67 ? .yellow : .green))
-                                    .frame(width: 50, alignment: .trailing)
                             }
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -239,6 +250,15 @@ struct ContentView: View {
                             ) {
                                 HStack {
                                     Text(habit.name)
+                                    
+                                    Button {
+                                        notesHabitId = habit.id
+                                        notesText = habit.notes ?? ""
+                                        showingNotesSheet = true
+                                    } label: {
+                                        Image(systemName: "info.circle")
+                                    }
+                                    .buttonStyle(.borderless)
                                     Spacer()
                                     
                                     let streak = viewModel.currentStreak(for: habit)
@@ -259,10 +279,23 @@ struct ContentView: View {
                                         .frame(width: 50, alignment: .trailing)
                                 }
                             }
-                        }
-                        .onDelete { indexSet in
-                            viewModel.removeHabits(at: indexSet)
-                            FeedbackManager.shared.error()
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    pendingDeleteHabitId = habit.id
+                                    showingSwipeDeleteConfirmation = true
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                
+                                Button {
+                                    renameHabitId = habit.id
+                                    renameText = habit.name
+                                    showingRenameAlert = true
+                                } label: {
+                                    Image(systemName: "pencil")
+                                }
+                                .tint(.blue)
+                            }
                         }
                         .onMove(perform: viewModel.moveHabits)
                     }
@@ -304,7 +337,47 @@ struct ContentView: View {
                              newHabitName: $newHabitName,
                              isPresented: $showingAddHabitSheet)
             }
-            .confirmationDialog("Delete selected habits?", isPresented: $showingBulkDeleteConfirmation, titleVisibility: .visible) {
+            .sheet(isPresented: $showingNotesSheet, onDismiss: {
+                notesHabitId = nil
+            }) {
+                NotesEditorSheet(
+                    notesText: $notesText,
+                    onCancel: {
+                        showingNotesSheet = false
+                    },
+                    onSave: {
+                        if let habitId = notesHabitId {
+                            viewModel.updateNotes(id: habitId, notes: notesText)
+                        }
+                        showingNotesSheet = false
+                    }
+                )
+            }
+            .alert("Rename Habit - Enter a new name", isPresented: $showingRenameAlert) {
+                TextField("Name", text: $renameText)
+                Button("Cancel", role: .cancel) {
+                    renameHabitId = nil
+                }
+                Button("Save") {
+                    if let habitId = renameHabitId {
+                        viewModel.renameHabit(id: habitId, newName: renameText)
+                    }
+                    renameHabitId = nil
+                }
+            }
+            .alert("Delete this habit?", isPresented: $showingSwipeDeleteConfirmation) {
+                Button("Delete", role: .destructive) {
+                    if let habitId = pendingDeleteHabitId {
+                        viewModel.deleteHabit(id: habitId)
+                        FeedbackManager.shared.error()
+                    }
+                    pendingDeleteHabitId = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingDeleteHabitId = nil
+                }
+            }
+            .alert("Delete selected habits?", isPresented: $showingBulkDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
                     viewModel.deleteHabits(ids: habitIDsToDelete)
                     selection.removeAll()
@@ -341,6 +414,8 @@ struct HabitDetailView: View {
     @State private var renameText: String = ""
     @Environment(\.dismiss) private var dismiss
     @State private var showingDeleteConfirmation = false
+    @State private var showingNotesSheet = false
+    @State private var notesText = ""
     
     private let calendar = Calendar.current
     private let dateFormatter: DateFormatter = {
@@ -392,10 +467,20 @@ struct HabitDetailView: View {
     var body: some View {
         VStack(spacing: 16) {
             if let habit = habit {
-                Text(habit.name)
-                    .font(.title)
-                    .bold()
-                    .padding(.top)
+                HStack(spacing: 8) {
+                    Text(habit.name)
+                        .font(.title)
+                        .bold()
+                    
+                    Button {
+                        notesText = habit.notes ?? ""
+                        showingNotesSheet = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .buttonStyle(.borderless)
+                }
+                .padding(.top)
                 
                 Text(currentMonthYear)
                     .font(.headline)
@@ -531,7 +616,45 @@ struct HabitDetailView: View {
             }
             Button("Cancel", role: .cancel) { }
         }
+        .sheet(isPresented: $showingNotesSheet) {
+            NotesEditorSheet(
+                notesText: $notesText,
+                onCancel: {
+                    showingNotesSheet = false
+                },
+                onSave: {
+                    viewModel.updateNotes(id: habitId, notes: notesText)
+                    showingNotesSheet = false
+                }
+            )
+        }
         .navigationTitle("Habit Details")
+    }
+}
+
+struct NotesEditorSheet: View {
+    @Binding var notesText: String
+    let onCancel: () -> Void
+    let onSave: () -> Void
+    
+    var body: some View {
+        NavigationView {
+            TextEditor(text: $notesText)
+                .padding()
+                .navigationTitle("Notes")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Cancel") {
+                            onCancel()
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Save") {
+                            onSave()
+                        }
+                    }
+                }
+        }
     }
 }
 
