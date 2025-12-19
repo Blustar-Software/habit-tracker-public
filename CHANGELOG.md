@@ -1,8 +1,10 @@
 ## v0.4.0 - $
 
 ### Added
+- **Live file reload:** The app now reloads habits when the selected `habits.json` changes or is replaced.
 
 ### Changed
+- **File access recovery:** If the selected file is replaced at the same path, the app attempts to auto-repair access instead of forcing re-selection.
 - **Implicit skips:** Unmarked days no longer break a streak. If a user intends to skip certain days for the habit, they can simply leave a day unmarked.
 
 ### Fixed

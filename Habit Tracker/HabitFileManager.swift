@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Darwin
 import UIKit
 import SwiftUI
 import Combine
@@ -14,12 +15,16 @@ import UniformTypeIdentifiers
 
 class HabitFileManager: NSObject, ObservableObject {
     static let shared = HabitFileManager()
+    static let fileDidChangeNotification = Notification.Name("HabitFileDidChangeNotification")
     
     @Published var fileURL: URL?
     @Published var needsFileSelection = false
     
     private let bookmarkKey = "HabitFileBookmark"
     private let originalPathKey = "HabitFileOriginalPath"
+    private var fileMonitorSource: DispatchSourceFileSystemObject?
+    private var monitoredFileDescriptor: Int32 = -1
+    private var lastKnownModificationDate: Date?
     
     private override init() {
         super.init()
@@ -43,6 +48,9 @@ class HabitFileManager: NSObject, ObservableObject {
             
             if isStale {
                 // Bookmark is stale, need to recreate it
+                if attemptRepairIfPossible(originalPath: originalPath) {
+                    return
+                }
                 clearBookmarkData()
                 shouldShowAlert = true
                 needsFileSelection = true
@@ -52,6 +60,9 @@ class HabitFileManager: NSObject, ObservableObject {
             
             // Start accessing the security-scoped resource
             guard url.startAccessingSecurityScopedResource() else {
+                if attemptRepairIfPossible(originalPath: originalPath) {
+                    return
+                }
                 clearBookmarkData()
                 shouldShowAlert = true
                 needsFileSelection = true
@@ -63,6 +74,9 @@ class HabitFileManager: NSObject, ObservableObject {
             if url.path != originalPath {
                 print("File has moved from original location")
                 url.stopAccessingSecurityScopedResource()
+                if attemptRepairIfPossible(originalPath: originalPath) {
+                    return
+                }
                 clearBookmarkData()
                 shouldShowAlert = true
                 needsFileSelection = true
@@ -75,6 +89,9 @@ class HabitFileManager: NSObject, ObservableObject {
             if pathString.contains(".trash") || pathString.contains("recently deleted") {
                 print("File is in trash")
                 url.stopAccessingSecurityScopedResource()
+                if attemptRepairIfPossible(originalPath: originalPath) {
+                    return
+                }
                 clearBookmarkData()
                 shouldShowAlert = true
                 needsFileSelection = true
@@ -88,6 +105,9 @@ class HabitFileManager: NSObject, ObservableObject {
                   (try? Data(contentsOf: url)) != nil else {
                 print("File exists but cannot be read")
                 url.stopAccessingSecurityScopedResource()
+                if attemptRepairIfPossible(originalPath: originalPath) {
+                    return
+                }
                 clearBookmarkData()
                 shouldShowAlert = true
                 needsFileSelection = true
@@ -97,8 +117,13 @@ class HabitFileManager: NSObject, ObservableObject {
             
             self.fileURL = url
             needsFileSelection = false
+            startMonitoringFile(at: url)
+            refreshLastKnownModificationDate(for: url)
         } catch {
             print("Error resolving bookmark: \(error)")
+            if attemptRepairIfPossible(originalPath: originalPath) {
+                return
+            }
             clearBookmarkData()
             shouldShowAlert = true
             needsFileSelection = true
@@ -121,6 +146,8 @@ class HabitFileManager: NSObject, ObservableObject {
             UserDefaults.standard.set(url.path, forKey: originalPathKey) // Store original path
             self.fileURL = url
             needsFileSelection = false
+            startMonitoringFile(at: url)
+            refreshLastKnownModificationDate(for: url)
         } catch {
             print("Error saving bookmark: \(error)")
         }
@@ -130,6 +157,8 @@ class HabitFileManager: NSObject, ObservableObject {
         if let url = fileURL {
             url.stopAccessingSecurityScopedResource()
         }
+        stopMonitoringFile()
+        lastKnownModificationDate = nil
         clearBookmarkData()
         fileURL = nil
         needsFileSelection = true
@@ -170,6 +199,8 @@ class HabitFileManager: NSObject, ObservableObject {
             handleFileAccessError()
             return
         }
+        
+        notifyFileChangedIfNeeded(for: url)
     }
     
     // MARK: - File Operations
@@ -192,6 +223,7 @@ class HabitFileManager: NSObject, ObservableObject {
             encoder.outputFormatting = .prettyPrinted
             let data = try encoder.encode(habits)
             try data.write(to: url, options: .atomic)
+            refreshLastKnownModificationDate(for: url)
         } catch {
             print("Error saving habits: \(error)")
             handleFileAccessError()
@@ -215,6 +247,7 @@ class HabitFileManager: NSObject, ObservableObject {
             let data = try Data(contentsOf: url)
             let decoder = JSONDecoder()
             let habits = try decoder.decode([Habit].self, from: data)
+            refreshLastKnownModificationDate(for: url)
             return habits
         } catch {
             print("Error loading habits: \(error)")
@@ -225,6 +258,10 @@ class HabitFileManager: NSObject, ObservableObject {
     }
     
     private func handleFileAccessError() {
+        if attemptRepairIfPossible() {
+            return
+        }
+        
         // Clear the invalid bookmark and trigger file selection
         DispatchQueue.main.async {
             self.clearBookmark()
@@ -247,6 +284,101 @@ class HabitFileManager: NSObject, ObservableObject {
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         
         viewController.present(alert, animated: true)
+    }
+    
+    // MARK: - File Monitoring and Repair
+    
+    private func startMonitoringFile(at url: URL) {
+        stopMonitoringFile()
+        
+        monitoredFileDescriptor = open(url.path, O_EVTONLY)
+        guard monitoredFileDescriptor >= 0 else { return }
+        
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: monitoredFileDescriptor,
+            eventMask: [.write, .delete, .rename],
+            queue: DispatchQueue.global(qos: .utility)
+        )
+        
+        source.setEventHandler { [weak self] in
+            self?.handleFileSystemEvent()
+        }
+        source.setCancelHandler { [weak self] in
+            guard let self = self, self.monitoredFileDescriptor >= 0 else { return }
+            close(self.monitoredFileDescriptor)
+            self.monitoredFileDescriptor = -1
+        }
+        
+        fileMonitorSource = source
+        source.resume()
+    }
+    
+    private func stopMonitoringFile() {
+        fileMonitorSource?.cancel()
+        fileMonitorSource = nil
+    }
+    
+    private func handleFileSystemEvent() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.handleFileChangeIfPossible()
+        }
+    }
+    
+    private func handleFileChangeIfPossible() {
+        guard let url = fileURL else { return }
+        
+        if FileManager.default.fileExists(atPath: url.path),
+           FileManager.default.isReadableFile(atPath: url.path) {
+            notifyFileChangedIfNeeded(for: url)
+            return
+        }
+        
+        if !attemptRepairIfPossible() {
+            handleFileAccessError()
+        }
+    }
+    
+    private func notifyFileChangedIfNeeded(for url: URL) {
+        guard hasModificationDateChanged(for: url) else { return }
+        postFileChangedNotification()
+        refreshLastKnownModificationDate(for: url)
+    }
+    
+    private func postFileChangedNotification() {
+        NotificationCenter.default.post(name: Self.fileDidChangeNotification, object: nil)
+    }
+    
+    private func refreshLastKnownModificationDate(for url: URL) {
+        lastKnownModificationDate = currentModificationDate(for: url)
+    }
+    
+    private func hasModificationDateChanged(for url: URL) -> Bool {
+        guard let current = currentModificationDate(for: url) else { return false }
+        return lastKnownModificationDate != current
+    }
+    
+    private func currentModificationDate(for url: URL) -> Date? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let date = attributes[.modificationDate] as? Date else {
+            return nil
+        }
+        return date
+    }
+    
+    private func attemptRepairIfPossible(originalPath: String? = nil) -> Bool {
+        let storedPath = originalPath ?? UserDefaults.standard.string(forKey: originalPathKey)
+        guard let path = storedPath else { return false }
+        
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: url.path),
+              FileManager.default.isReadableFile(atPath: url.path) else {
+            return false
+        }
+        
+        _ = url.startAccessingSecurityScopedResource()
+        saveBookmark(for: url)
+        postFileChangedNotification()
+        return true
     }
     
     // MARK: - Document Picker

@@ -25,9 +25,15 @@ class HabitViewModel: ObservableObject {
     @Published var habits: [Habit] = []
     
     private let fileManager = HabitFileManager.shared
+    private var fileChangeObserver: AnyCancellable?
     
     init() {
         loadHabits()
+        fileChangeObserver = NotificationCenter.default.publisher(for: HabitFileManager.fileDidChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.loadHabits()
+            }
     }
     
     func addHabit(name: String) {

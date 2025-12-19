@@ -28,6 +28,10 @@ Installation
   3. Build and run on your device or simulator.
 (Requires a personal Apple developer team for local builds.)
 
+Data Storage
+
+Habit data is stored in a user-selected `habits.json` file. You can keep it in iCloud Drive to sync across devices, and the app will reload when the file changes or is replaced at the same path.
+
 ⸻
 
 Usage
