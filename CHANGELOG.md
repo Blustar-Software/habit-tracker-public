@@ -1,10 +1,20 @@
-## v0.4.0 - $
+## v0.5.0 - Major new features, enhancements
 
 ### Added
+- **Bird's-eye view:** A week-at-a-glance grid across all habits, with inline toggles, week navigation, and per-habit stats/notes access.
+- **Notes:** Notes can now be added per habit and edited from the main list, details view, and bird's-eye view.
 - **Live file reload:** The app now reloads habits when the selected `habits.json` changes or is replaced.
 
 ### Changed
+- **Statistics panel:** Details view statistics are now centered with an expandable section for all-time streak and total successful days.
+- **Main list actions:** Swipe, long-press, and edit-mode behaviors were refined (confirm delete, quick rename, and reorder handles).
 - **File access recovery:** If the selected file is replaced at the same path, the app attempts to auto-repair access instead of forcing re-selection.
+
+## v0.4.0 - Minor UI/UX Improvements
+
+### Added
+
+### Changed
 - **Implicit skips:** Unmarked days no longer break a streak. If a user intends to skip certain days for the habit, they can simply leave a day unmarked.
 
 ### Fixed

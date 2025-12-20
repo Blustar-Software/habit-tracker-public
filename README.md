@@ -32,6 +32,11 @@ Data Storage
 
 Habit data is stored in a user-selected `habits.json` file. You can keep it in iCloud Drive to sync across devices, and the app will reload when the file changes or is replaced at the same path.
 
+New in v0.5.0
+
+- A bird's-eye view provides a week-at-a-glance grid across all habits with quick toggles.
+- Habit notes can be viewed and edited from the main list, details view, and bird's-eye view.
+
 ⸻
 
 Usage

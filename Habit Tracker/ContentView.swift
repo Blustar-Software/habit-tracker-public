@@ -148,6 +148,38 @@ class HabitViewModel: ObservableObject {
         return (Double(successes) / Double(total)) * 100.0
     }
     
+    func totalSuccessfulDays(for habit: Habit) -> Int {
+        habit.completion.values.filter { $0 == true }.count
+    }
+    
+    func allTimeStreak(for habit: Habit) -> Int {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.timeZone = TimeZone.current
+        
+        let markedDates: [(Date, Bool)] = habit.completion.compactMap { key, value in
+            guard let date = df.date(from: key) else { return nil }
+            return (date, value)
+        }
+        .sorted { $0.0 < $1.0 }
+        
+        var maxStreak = 0
+        var current = 0
+        
+        for (_, value) in markedDates {
+            if value {
+                current += 1
+                if current > maxStreak {
+                    maxStreak = current
+                }
+            } else {
+                current = 0
+            }
+        }
+        
+        return maxStreak
+    }
+    
     // Helper to compute current streak. Unmarked days are ignored, and only unsuccessful days break the streak.
     func currentStreak(for habit: Habit) -> Int {
         let df = DateFormatter()
@@ -195,6 +227,58 @@ class HabitViewModel: ObservableObject {
         
         return streak
     }
+    
+    func dateString(for date: Date) -> String {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.timeZone = TimeZone.current
+        return df.string(from: date)
+    }
+    
+    func weekDates(for weekOffset: Int) -> [Date] {
+        let calendar = Calendar.current
+        let target = calendar.date(byAdding: .weekOfYear, value: weekOffset, to: Date()) ?? Date()
+        guard let interval = calendar.dateInterval(of: .weekOfYear, for: target) else { return [] }
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: interval.start) }
+    }
+    
+    func weekSuccessPercentage(weekOffset: Int) -> Double {
+        let dateStrings = weekDates(for: weekOffset).map { dateString(for: $0) }
+        guard !dateStrings.isEmpty else { return 0 }
+        var total = 0
+        var success = 0
+        
+        for habit in habits {
+            for dateString in dateStrings {
+                if let value = habit.completion[dateString] {
+                    total += 1
+                    if value {
+                        success += 1
+                    }
+                }
+            }
+        }
+        
+        guard total > 0 else { return 0 }
+        return (Double(success) / Double(total)) * 100.0
+    }
+    
+    func overallSuccessPercentage() -> Double {
+        var total = 0
+        var success = 0
+        
+        for habit in habits {
+            for value in habit.completion.values {
+                total += 1
+                if value {
+                    success += 1
+                }
+            }
+        }
+        
+        guard total > 0 else { return 0 }
+        return (Double(success) / Double(total)) * 100.0
+    }
 }
 
 struct ContentView: View {
@@ -213,186 +297,532 @@ struct ContentView: View {
     @State private var showingNotesSheet = false
     @State private var notesHabitId: UUID?
     @State private var notesText = ""
+    @State private var showingBirdsEyeSheet = false
+    
+    var body: some View {
+        rootView
+    }
+    
+    private var rootView: some View {
+        NavigationView {
+            mainContent
+        }
+        .sheet(isPresented: $showingAddHabitSheet) {
+            AddHabitView(viewModel: viewModel,
+                         newHabitName: $newHabitName,
+                         isPresented: $showingAddHabitSheet)
+        }
+        .sheet(isPresented: $showingBirdsEyeSheet) {
+            BirdsEyeView()
+                .environmentObject(viewModel)
+        }
+        .sheet(isPresented: $showingNotesSheet, onDismiss: {
+            notesHabitId = nil
+        }) {
+            NotesEditorSheet(
+                notesText: $notesText,
+                onCancel: {
+                    showingNotesSheet = false
+                },
+                onSave: {
+                    if let habitId = notesHabitId {
+                        viewModel.updateNotes(id: habitId, notes: notesText)
+                    }
+                    showingNotesSheet = false
+                }
+            )
+        }
+        .alert("Rename Habit - Enter a new name", isPresented: $showingRenameAlert) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) {
+                renameHabitId = nil
+            }
+            Button("Save") {
+                if let habitId = renameHabitId {
+                    viewModel.renameHabit(id: habitId, newName: renameText)
+                }
+                renameHabitId = nil
+            }
+        }
+        .alert("Delete this habit?", isPresented: $showingSwipeDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                if let habitId = pendingDeleteHabitId {
+                    viewModel.deleteHabit(id: habitId)
+                    FeedbackManager.shared.error()
+                }
+                pendingDeleteHabitId = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeleteHabitId = nil
+            }
+        }
+        .alert("Delete selected habits?", isPresented: $showingBulkDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                viewModel.deleteHabits(ids: habitIDsToDelete)
+                selection.removeAll()
+                habitIDsToDelete.removeAll()
+                FeedbackManager.shared.error()
+                DispatchQueue.main.async {
+                    withAnimation {
+                        isEditing = false // Exit edit mode after deletion
+                    }
+                }
+            }
+            Button(role: .cancel) {
+                habitIDsToDelete.removeAll()
+            }
+        }
+    }
+    
+    private var mainContent: some View {
+        VStack {
+            habitList
+        }
+        .navigationTitle("Habit Tracker")
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(isEditing ? "Done" : "Edit") {
+                    isEditing.toggle()
+                    if !isEditing {
+                        selection.removeAll()
+                    }
+                }
+                .disabled(viewModel.habits.isEmpty)
+                .id(isEditing)
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showingBirdsEyeSheet = true
+                } label: {
+                    Image(systemName: "bird")
+                }
+                if isEditing {
+                    Button(role: .destructive) {
+                        habitIDsToDelete = selection
+                        showingBulkDeleteConfirmation = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .disabled(selection.isEmpty)
+                } else {
+                    Button {
+                        showingAddHabitSheet = true
+                    } label: {
+                        Label("Add Habit", systemImage: "plus.circle.fill")
+                    }
+                }
+            }
+        }
+    }
+    
+    private var habitList: some View {
+        List {
+            habitListRows
+        }
+        .listStyle(PlainListStyle())
+        .environment(\.editMode, .constant(isEditing ? .active : .inactive))
+    }
+    
+    @ViewBuilder
+    private var habitListRows: some View {
+        if isEditing {
+            ForEach(viewModel.habits) { habit in
+                HStack {
+                    if selection.contains(habit.id) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.blue)
+                    } else {
+                        Image(systemName: "circle")
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Text(habit.name)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if selection.contains(habit.id) {
+                        selection.remove(habit.id)
+                    } else {
+                        selection.insert(habit.id)
+                    }
+                    FeedbackManager.shared.selection()
+                }
+            }
+            .onMove(perform: viewModel.moveHabits)
+        } else {
+            ForEach(viewModel.habits) { habit in
+                NavigationLink(destination: HabitDetailView(habitId: habit.id)
+                    .environmentObject(viewModel)
+                ) {
+                    MainHabitRow(viewModel: viewModel, habit: habit) {
+                        notesHabitId = habit.id
+                        notesText = habit.notes ?? ""
+                        showingNotesSheet = true
+                    }
+                }
+                .contextMenu {
+                    Button("Rename", systemImage: "pencil") {
+                        renameHabitId = habit.id
+                        renameText = habit.name
+                        showingRenameAlert = true
+                    }
+                    Button(role: .destructive) {
+                        pendingDeleteHabitId = habit.id
+                        showingSwipeDeleteConfirmation = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        pendingDeleteHabitId = habit.id
+                        showingSwipeDeleteConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    
+                    Button {
+                        renameHabitId = habit.id
+                        renameText = habit.name
+                        showingRenameAlert = true
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+                    .tint(.blue)
+                }
+            }
+        }
+    }
+    
+}
+
+struct BirdsEyeView: View {
+    @EnvironmentObject var viewModel: HabitViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var weekOffset = 0
+    @State private var showingStatsSheet = false
+    @State private var statsHabitId: UUID?
+    @State private var showingNotesSheet = false
+    @State private var notesHabitId: UUID?
+    @State private var notesText = ""
     
     var body: some View {
         NavigationView {
-            VStack {
+            VStack(spacing: 12) {
+                let weekPct = viewModel.weekSuccessPercentage(weekOffset: weekOffset)
+                let overallPct = viewModel.overallSuccessPercentage()
+                
+                VStack(spacing: 4) {
+                    Text(String(format: "All-Time Success: %.0f%%", overallPct))
+                        .font(.headline)
+                        .foregroundColor(overallPct < 34 ? .red : (overallPct < 67 ? .yellow : .green))
+                    Text(String(format: "Week Success: %.0f%%", weekPct))
+                        .font(.subheadline)
+                        .foregroundColor(weekPct < 34 ? .red : (weekPct < 67 ? .yellow : .green))
+                }
+                
+                HStack(spacing: 12) {
+                    Button {
+                        weekOffset -= 1
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Text(weekRangeTitle(weekOffset: weekOffset))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    Button {
+                        weekOffset += 1
+                    } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                WeekdayHeaderRow(weekDates: viewModel.weekDates(for: weekOffset))
+                    .padding(.horizontal)
+                
                 List {
-                    if isEditing {
-                        ForEach(viewModel.habits) { habit in
-                            HStack {
-                                if selection.contains(habit.id) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.blue)
-                                } else {
-                                    Image(systemName: "circle")
-                                        .foregroundColor(.gray)
-                                }
-                                
-                                Text(habit.name)
-                                Spacer()
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if selection.contains(habit.id) {
-                                    selection.remove(habit.id)
-                                } else {
-                                    selection.insert(habit.id)
-                                }
-                                FeedbackManager.shared.selection()
-                            }
+                    ForEach(viewModel.habits) { habit in
+                        BirdsEyeHabitRow(habit: habit, weekDates: viewModel.weekDates(for: weekOffset)) {
+                            statsHabitId = habit.id
+                            showingStatsSheet = true
+                        } onShowNotes: {
+                            notesHabitId = habit.id
+                            notesText = habit.notes ?? ""
+                            showingNotesSheet = true
                         }
-                        .onMove(perform: viewModel.moveHabits)
-                    } else {
-                        ForEach(viewModel.habits) { habit in
-                            NavigationLink(destination: HabitDetailView(habitId: habit.id)
-                                .environmentObject(viewModel)
-                            ) {
-                                HStack {
-                                    Text(habit.name)
-                                    
-                                    Button {
-                                        notesHabitId = habit.id
-                                        notesText = habit.notes ?? ""
-                                        showingNotesSheet = true
-                                    } label: {
-                                        Image(systemName: "info.circle")
-                                    }
-                                    .buttonStyle(.borderless)
-                                    Spacer()
-                                    
-                                    let streak = viewModel.currentStreak(for: habit)
-                                    let streakColor: Color = (streak == 0) ? .red : .green
-
-                                    Text("\(streak > 99 ? "99+" : "\(streak)")")
-                                        .font(.caption)
-                                        .frame(width: 25, height: 25)
-                                        .background(
-                                            Circle()
-                                                .foregroundColor(streakColor)
-                                        )
-                                        .foregroundColor(.white)
-                                    
-                                    let pct = viewModel.successPercentage(for: habit)
-                                    Text(String(format: "%.0f%%", pct))
-                                        .foregroundColor(pct < 34 ? .red : (pct < 67 ? .yellow : .green))
-                                        .frame(width: 50, alignment: .trailing)
-                                }
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    pendingDeleteHabitId = habit.id
-                                    showingSwipeDeleteConfirmation = true
-                                } label: {
-                                    Image(systemName: "trash")
-                                }
-                                
-                                Button {
-                                    renameHabitId = habit.id
-                                    renameText = habit.name
-                                    showingRenameAlert = true
-                                } label: {
-                                    Image(systemName: "pencil")
-                                }
-                                .tint(.blue)
-                            }
-                        }
-                        .onMove(perform: viewModel.moveHabits)
                     }
                 }
                 .listStyle(PlainListStyle())
             }
-            .navigationTitle("Habit Tracker")
+            .navigationTitle("Bird's-Eye")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(isEditing ? "Done" : "Edit") {
-                        isEditing.toggle()
-                        if !isEditing {
-                            selection.removeAll()
-                        }
-                    }
-                    .disabled(viewModel.habits.isEmpty)
-                    .id(isEditing)
-                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if isEditing {
-                        Button(role: .destructive) {
-                            habitIDsToDelete = selection
-                            showingBulkDeleteConfirmation = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        .disabled(selection.isEmpty)
-                    } else {
-                        Button {
-                            showingAddHabitSheet = true
-                        } label: {
-                            Label("Add Habit", systemImage: "plus.circle.fill")
-                        }
+                    Button("Done") {
+                        dismiss()
                     }
                 }
             }
-            .sheet(isPresented: $showingAddHabitSheet) {
-                AddHabitView(viewModel: viewModel,
-                             newHabitName: $newHabitName,
-                             isPresented: $showingAddHabitSheet)
+        }
+        .sheet(isPresented: $showingStatsSheet, onDismiss: {
+            statsHabitId = nil
+        }) {
+            if let habitId = statsHabitId {
+                HabitStatsSheet(habitId: habitId)
+                    .environmentObject(viewModel)
             }
-            .sheet(isPresented: $showingNotesSheet, onDismiss: {
-                notesHabitId = nil
-            }) {
-                NotesEditorSheet(
-                    notesText: $notesText,
-                    onCancel: {
-                        showingNotesSheet = false
-                    },
-                    onSave: {
-                        if let habitId = notesHabitId {
-                            viewModel.updateNotes(id: habitId, notes: notesText)
-                        }
-                        showingNotesSheet = false
+        }
+        .sheet(isPresented: $showingNotesSheet, onDismiss: {
+            notesHabitId = nil
+        }) {
+            NotesEditorSheet(
+                notesText: $notesText,
+                onCancel: {
+                    showingNotesSheet = false
+                },
+                onSave: {
+                    if let habitId = notesHabitId {
+                        viewModel.updateNotes(id: habitId, notes: notesText)
                     }
+                    showingNotesSheet = false
+                }
+            )
+        }
+    }
+    
+    private func weekRangeTitle(weekOffset: Int) -> String {
+        let dates = viewModel.weekDates(for: weekOffset)
+        guard let start = dates.first, let end = dates.last else { return "Week" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        let startText = formatter.string(from: start)
+        let endText = formatter.string(from: end)
+        return "\(startText)–\(endText)"
+    }
+}
+
+struct WeekdayHeaderRow: View {
+    let weekDates: [Date]
+    
+    var body: some View {
+        let symbols = orderedWeekdaySymbols
+        HStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Text("Habit")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            HStack(spacing: 6) {
+                ForEach(Array(weekDates.enumerated()), id: \.offset) { index, _ in
+                    Text(symbols.indices.contains(index) ? symbols[index] : "")
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(width: 25)
+                }
+            }
+        }
+    }
+    
+    private var orderedWeekdaySymbols: [String] {
+        let calendar = Calendar.current
+        let symbols = calendar.shortWeekdaySymbols
+        let startIndex = calendar.firstWeekday - 1
+        return Array(symbols[startIndex..<symbols.count] + symbols[0..<startIndex])
+    }
+}
+
+struct BirdsEyeHabitRow: View {
+    @EnvironmentObject var viewModel: HabitViewModel
+    let habit: Habit
+    let weekDates: [Date]
+    let onShowStats: () -> Void
+    let onShowNotes: () -> Void
+    @State private var showingTitle = false
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            HStack(spacing: 6) {
+                ZStack(alignment: .leading) {
+                    Text(habit.name)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .onTapGesture {
+                            showingTitle = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                showingTitle = false
+                            }
+                        }
+                    
+                    if showingTitle {
+                        Text(habit.name)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .shadow(radius: 2)
+                            .transition(.opacity)
+                    }
+                }
+                Button {
+                    onShowStats()
+                } label: {
+                    Image(systemName: "chart.bar")
+                        .foregroundColor(.orange)
+                }
+                .font(.caption2)
+                .buttonStyle(.borderless)
+                
+                Button {
+                    onShowNotes()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.borderless)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            WeekDotsRow(habit: habit, weekDates: weekDates)
+        }
+    }
+}
+
+struct WeekDotsRow: View {
+    @EnvironmentObject var viewModel: HabitViewModel
+    let habit: Habit
+    let weekDates: [Date]
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(weekDates, id: \.self) { date in
+                dotView(for: date)
+            }
+        }
+    }
+    
+    private func dotView(for date: Date) -> some View {
+        let dateString = viewModel.dateString(for: date)
+        let completed = viewModel.isCompleted(habitId: habit.id, dateString: dateString)
+        let color: Color = (completed == true) ? .green : ((completed == false) ? .red : .gray)
+        
+        return Text("\(Calendar.current.component(.day, from: date))")
+            .font(.caption2)
+            .frame(width: 25, height: 25)
+            .background(
+                Circle()
+                    .foregroundColor(color)
+            )
+            .foregroundColor(.white)
+            .overlay(
+                Circle()
+                    .stroke(Calendar.current.isDateInToday(date) ? Color.yellow : Color.clear, lineWidth: 2)
+            )
+            .onTapGesture {
+                switch completed {
+                case nil:
+                    viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: true)
+                    FeedbackManager.shared.success()
+                case true:
+                    viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: false)
+                    FeedbackManager.shared.failure()
+                case false:
+                    viewModel.removeCompletion(habitId: habit.id, dateString: dateString)
+                    FeedbackManager.shared.tap()
+                }
+            }
+    }
+}
+
+struct HabitStatsSheet: View {
+    let habitId: UUID
+    @EnvironmentObject var viewModel: HabitViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    private var habit: Habit? {
+        viewModel.habits.first(where: { $0.id == habitId })
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack(alignment: .leading, spacing: 10) {
+                if let habit = habit {
+                    let lifetimePct = viewModel.successPercentage(for: habit)
+                    let streak = viewModel.currentStreak(for: habit)
+                    Text(habit.name)
+                        .font(.title3)
+                        .bold()
+                        .padding(.bottom, 6)
+                    Text("Current Streak: \(streak) day\(streak == 1 ? "" : "s")")
+                        .font(.subheadline)
+                        .bold()
+                    Text(String(format: "Success (All Time): %.0f%%", lifetimePct))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("Total Successful Days: \(viewModel.totalSuccessfulDays(for: habit))")
+                        .font(.subheadline)
+                    Text("All-Time Streak: \(viewModel.allTimeStreak(for: habit)) days")
+                        .font(.subheadline)
+                } else {
+                    Text("Habit not found")
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Statistics")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct MainHabitRow: View {
+    @ObservedObject var viewModel: HabitViewModel
+    let habit: Habit
+    let onShowNotes: () -> Void
+    
+    var body: some View {
+        HStack {
+            Text(habit.name)
+            
+            Button {
+                onShowNotes()
+            } label: {
+                Image(systemName: "info.circle")
+            }
+            .buttonStyle(.borderless)
+            
+            Spacer()
+            
+            let streak = viewModel.currentStreak(for: habit)
+            let streakColor: Color = (streak == 0) ? .red : .green
+
+            Text("\(streak > 99 ? "99+" : "\(streak)")")
+                .font(.caption)
+                .frame(width: 25, height: 25)
+                .background(
+                    Circle()
+                        .foregroundColor(streakColor)
                 )
-            }
-            .alert("Rename Habit - Enter a new name", isPresented: $showingRenameAlert) {
-                TextField("Name", text: $renameText)
-                Button("Cancel", role: .cancel) {
-                    renameHabitId = nil
-                }
-                Button("Save") {
-                    if let habitId = renameHabitId {
-                        viewModel.renameHabit(id: habitId, newName: renameText)
-                    }
-                    renameHabitId = nil
-                }
-            }
-            .alert("Delete this habit?", isPresented: $showingSwipeDeleteConfirmation) {
-                Button("Delete", role: .destructive) {
-                    if let habitId = pendingDeleteHabitId {
-                        viewModel.deleteHabit(id: habitId)
-                        FeedbackManager.shared.error()
-                    }
-                    pendingDeleteHabitId = nil
-                }
-                Button("Cancel", role: .cancel) {
-                    pendingDeleteHabitId = nil
-                }
-            }
-            .alert("Delete selected habits?", isPresented: $showingBulkDeleteConfirmation) {
-                Button("Delete", role: .destructive) {
-                    viewModel.deleteHabits(ids: habitIDsToDelete)
-                    selection.removeAll()
-                    habitIDsToDelete.removeAll()
-                    FeedbackManager.shared.error()
-                    DispatchQueue.main.async {
-                        withAnimation {
-                            isEditing = false // Exit edit mode after deletion
-                        }
-                    }
-                }
-                Button(role: .cancel) {
-                    habitIDsToDelete.removeAll()
-                }
-            }
+                .foregroundColor(.white)
+            
+            let pct = viewModel.successPercentage(for: habit)
+            Text(String(format: "%.0f%%", pct))
+                .foregroundColor(pct < 34 ? .red : (pct < 67 ? .yellow : .green))
+                .frame(width: 50, alignment: .trailing)
         }
     }
 }
@@ -416,6 +846,7 @@ struct HabitDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var showingNotesSheet = false
     @State private var notesText = ""
+    @State private var showingStats = false
     
     private let calendar = Calendar.current
     private let dateFormatter: DateFormatter = {
@@ -465,7 +896,9 @@ struct HabitDetailView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        HStack {
+            Spacer(minLength: 0)
+            VStack(spacing: 16) {
             if let habit = habit {
                 HStack(spacing: 8) {
                     Text(habit.name)
@@ -557,7 +990,7 @@ struct HabitDetailView: View {
                 .padding(.horizontal)
                 
                 // Stats
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .center, spacing: 8) {
                     Spacer()
                     let lifetimePct = viewModel.successPercentage(for: habit)
                     let streak = viewModel.currentStreak(for: habit)
@@ -568,6 +1001,31 @@ struct HabitDetailView: View {
                     Text(String(format: "Success (All Time): %.0f%%", lifetimePct))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
+                    
+                    HStack {
+                        Spacer()
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showingStats.toggle()
+                            } 
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .rotationEffect(.degrees(showingStats ? 180 : 0))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                    }
+                    
+                    if showingStats {
+                        VStack(alignment: .center, spacing: 6) {
+                            Text("Total Successful Days: \(viewModel.totalSuccessfulDays(for: habit))")
+                                .font(.subheadline)
+                            Text("All-Time Streak: \(viewModel.allTimeStreak(for: habit)) days")
+                                .font(.subheadline)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal)
@@ -577,6 +1035,9 @@ struct HabitDetailView: View {
                 Text("Habit not found")
                     .foregroundColor(.secondary)
             }
+            }
+            .frame(maxWidth: 600)
+            Spacer(minLength: 0)
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -636,22 +1097,31 @@ struct NotesEditorSheet: View {
     @Binding var notesText: String
     let onCancel: () -> Void
     let onSave: () -> Void
+    @State private var initialText = ""
     
     var body: some View {
         NavigationView {
             TextEditor(text: $notesText)
                 .padding()
                 .navigationTitle("Notes")
+                .onAppear {
+                    initialText = notesText
+                }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Cancel") {
+                        Button {
                             onCancel()
+                        } label: {
+                            Image(systemName: "chevron.left")
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Save") {
+                        Button {
                             onSave()
+                        } label: {
+                            Image(systemName: "checkmark")
                         }
+                        .disabled(notesText == initialText)
                     }
                 }
         }
