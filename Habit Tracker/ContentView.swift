@@ -94,6 +94,17 @@ class HabitViewModel: ObservableObject {
         }
     }
     
+    func resetHabit(id: UUID) {
+        guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        habits[index] = Habit(
+            id: habits[index].id,
+            name: habits[index].name,
+            completion: [:],
+            notes: habits[index].notes
+        )
+        saveHabits()
+    }
+    
     func updateNotes(id: UUID, notes: String) {
         guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -291,6 +302,8 @@ struct ContentView: View {
     @State private var showingAddHabitSheet = false // New state for showing the sheet
     @State private var showingSwipeDeleteConfirmation = false
     @State private var pendingDeleteHabitId: UUID?
+    @State private var showingRetryConfirmation = false
+    @State private var pendingRetryHabitId: UUID?
     @State private var showingRenameAlert = false
     @State private var renameHabitId: UUID?
     @State private var renameText = ""
@@ -356,6 +369,18 @@ struct ContentView: View {
                 pendingDeleteHabitId = nil
             }
         }
+        .alert("Retry this habit? This resets its progress.", isPresented: $showingRetryConfirmation) {
+            Button("Retry") {
+                if let habitId = pendingRetryHabitId {
+                    viewModel.resetHabit(id: habitId)
+                    FeedbackManager.shared.tap()
+                }
+                pendingRetryHabitId = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingRetryHabitId = nil
+            }
+        }
         .alert("Delete selected habits?", isPresented: $showingBulkDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 viewModel.deleteHabits(ids: habitIDsToDelete)
@@ -378,10 +403,10 @@ struct ContentView: View {
         VStack {
             habitList
         }
-        .navigationTitle("Habit Tracker")
+        .navigationTitle("Habits")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button(isEditing ? "Done" : "Edit") {
+                Button(editButtonTitle) {
                     isEditing.toggle()
                     if !isEditing {
                         selection.removeAll()
@@ -396,6 +421,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "bird")
                 }
+                .disabled(isEditing)
                 if isEditing {
                     Button(role: .destructive) {
                         habitIDsToDelete = selection
@@ -413,6 +439,10 @@ struct ContentView: View {
                 }
             }
         }
+    }
+    
+    private var editButtonTitle: String {
+        isEditing ? "Cancel" : "Edit"
     }
     
     private var habitList: some View {
@@ -462,6 +492,10 @@ struct ContentView: View {
                     }
                 }
                 .contextMenu {
+                    Button("Retry", systemImage: "arrow.clockwise") {
+                        pendingRetryHabitId = habit.id
+                        showingRetryConfirmation = true
+                    }
                     Button("Rename", systemImage: "pencil") {
                         renameHabitId = habit.id
                         renameText = habit.name
@@ -490,6 +524,15 @@ struct ContentView: View {
                         Image(systemName: "pencil")
                     }
                     .tint(.blue)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    Button {
+                        pendingRetryHabitId = habit.id
+                        showingRetryConfirmation = true
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .tint(.orange)
                 }
             }
         }
@@ -676,7 +719,7 @@ struct BirdsEyeHabitRow: View {
                     onShowStats()
                 } label: {
                     Image(systemName: "chart.bar")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.secondary)
                 }
                 .font(.caption2)
                 .buttonStyle(.borderless)
@@ -809,20 +852,25 @@ struct MainHabitRow: View {
             
             let streak = viewModel.currentStreak(for: habit)
             let streakColor: Color = (streak == 0) ? .red : .green
+            let hasMarks = !habit.completion.isEmpty
+            let streakText = hasMarks ? (streak > 99 ? "99+" : "\(streak)") : "–"
+            let streakFill: Color = hasMarks ? streakColor : .gray
 
-            Text("\(streak > 99 ? "99+" : "\(streak)")")
+            Text(streakText)
                 .font(.caption)
                 .frame(width: 25, height: 25)
                 .background(
                     Circle()
-                        .foregroundColor(streakColor)
+                        .foregroundColor(streakFill)
                 )
                 .foregroundColor(.white)
             
             let pct = viewModel.successPercentage(for: habit)
-            Text(String(format: "%.0f%%", pct))
-                .foregroundColor(pct < 34 ? .red : (pct < 67 ? .yellow : .green))
-                .frame(width: 50, alignment: .trailing)
+            let pctText = hasMarks ? String(format: "%.0f%%", pct) : "–"
+            let pctColor: Color = hasMarks ? (pct < 34 ? .red : (pct < 67 ? .yellow : .green)) : .gray
+            Text(pctText)
+                .foregroundColor(pctColor)
+                .frame(width: 50, alignment: hasMarks ? .trailing : .center)
         }
     }
 }
@@ -844,6 +892,7 @@ struct HabitDetailView: View {
     @State private var renameText: String = ""
     @Environment(\.dismiss) private var dismiss
     @State private var showingDeleteConfirmation = false
+    @State private var showingRetryConfirmation = false
     @State private var showingNotesSheet = false
     @State private var notesText = ""
     @State private var showingStats = false
@@ -989,43 +1038,40 @@ struct HabitDetailView: View {
                 }
                 .padding(.horizontal)
                 
+                Spacer()
+                
                 // Stats
-                VStack(alignment: .center, spacing: 8) {
-                    Spacer()
+                VStack(alignment: .center, spacing: 6) {
                     let lifetimePct = viewModel.successPercentage(for: habit)
                     let streak = viewModel.currentStreak(for: habit)
-
-                    Text("Current Streak: \(streak) day\(streak == 1 ? "" : "s")")
-                        .font(.subheadline)
-                        .bold()
-                    Text(String(format: "Success (All Time): %.0f%%", lifetimePct))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
                     
-                    HStack {
-                        Spacer()
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showingStats.toggle()
-                            } 
-                        } label: {
-                            Image(systemName: "chevron.down")
-                                .rotationEffect(.degrees(showingStats ? 180 : 0))
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        Spacer()
-                    }
-                    
-                    if showingStats {
-                        VStack(alignment: .center, spacing: 6) {
+                    VStack(alignment: .center, spacing: 6) {
+                        Text("Current Streak: \(streak) day\(streak == 1 ? "" : "s")")
+                            .font(.subheadline)
+                            .bold()
+                        Text(String(format: "Success (All Time): %.0f%%", lifetimePct))
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        if showingStats {
                             Text("Total Successful Days: \(viewModel.totalSuccessfulDays(for: habit))")
                                 .font(.subheadline)
                             Text("All-Time Streak: \(viewModel.allTimeStreak(for: habit)) days")
                                 .font(.subheadline)
                         }
-                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
+                    .frame(maxWidth: .infinity)
+                    
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showingStats.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .rotationEffect(.degrees(showingStats ? 180 : 0))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal)
@@ -1042,6 +1088,9 @@ struct HabitDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button("Retry", systemImage: "arrow.clockwise") {
+                        showingRetryConfirmation = true
+                    }
                     Button("Rename", systemImage: "pencil") {
                         if let habit = habit {
                             renameText = habit.name
@@ -1067,6 +1116,13 @@ struct HabitDetailView: View {
                 }
             }
         }
+        .alert("Retry this habit? This resets its progress.", isPresented: $showingRetryConfirmation) {
+            Button("Retry") {
+                viewModel.resetHabit(id: habitId)
+                FeedbackManager.shared.tap()
+            }
+            Button("Cancel", role: .cancel) { }
+        }
         .confirmationDialog("Delete this habit?", isPresented: $showingDeleteConfirmation) {
             Button("Delete Habit", role: .destructive) {
                 if let habit = habit {
@@ -1089,7 +1145,7 @@ struct HabitDetailView: View {
                 }
             )
         }
-        .navigationTitle("Habit Details")
+        .navigationTitle("Details")
     }
 }
 

@@ -1,3 +1,12 @@
+## v0.6.0 - Current
+
+### Added
+- **Retry habit:** Swipe, long-press, or use the details menu to reset a habit’s progress with confirmation.
+
+### Changed
+- **Main view indicators:** Unmarked habits now show centered gray dashes for streak and all-time success.
+- **Details stats layout:** The chevron sits below the stats, and expanded stats push the base stats upward.
+
 ## v0.5.0 - Major new features, enhancements
 
 ### Added
