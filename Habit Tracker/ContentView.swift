@@ -23,6 +23,11 @@ struct Habit: Identifiable, Codable {
     }
 }
 
+struct NotesSheetContext: Identifiable {
+    let id: UUID
+    let title: String
+}
+
 class HabitViewModel: ObservableObject {
     @Published var habits: [Habit] = []
     
@@ -307,9 +312,8 @@ struct ContentView: View {
     @State private var showingRenameAlert = false
     @State private var renameHabitId: UUID?
     @State private var renameText = ""
-    @State private var showingNotesSheet = false
-    @State private var notesHabitId: UUID?
     @State private var notesText = ""
+    @State private var notesSheet: NotesSheetContext?
     @State private var showingBirdsEyeSheet = false
     
     var body: some View {
@@ -329,19 +333,18 @@ struct ContentView: View {
             BirdsEyeView()
                 .environmentObject(viewModel)
         }
-        .sheet(isPresented: $showingNotesSheet, onDismiss: {
-            notesHabitId = nil
-        }) {
+        .sheet(item: $notesSheet) { sheet in
             NotesEditorSheet(
+                title: sheet.title,
                 notesText: $notesText,
                 onCancel: {
-                    showingNotesSheet = false
+                    notesText = ""
+                    notesSheet = nil
                 },
                 onSave: {
-                    if let habitId = notesHabitId {
-                        viewModel.updateNotes(id: habitId, notes: notesText)
-                    }
-                    showingNotesSheet = false
+                    viewModel.updateNotes(id: sheet.id, notes: notesText)
+                    notesText = ""
+                    notesSheet = nil
                 }
             )
         }
@@ -486,9 +489,8 @@ struct ContentView: View {
                     .environmentObject(viewModel)
                 ) {
                     MainHabitRow(viewModel: viewModel, habit: habit) {
-                        notesHabitId = habit.id
                         notesText = habit.notes ?? ""
-                        showingNotesSheet = true
+                        notesSheet = NotesSheetContext(id: habit.id, title: habit.name)
                     }
                 }
                 .contextMenu {
@@ -546,63 +548,73 @@ struct BirdsEyeView: View {
     @State private var weekOffset = 0
     @State private var showingStatsSheet = false
     @State private var statsHabitId: UUID?
-    @State private var showingNotesSheet = false
-    @State private var notesHabitId: UUID?
     @State private var notesText = ""
+    @State private var notesSheet: NotesSheetContext?
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 12) {
-                let weekPct = viewModel.weekSuccessPercentage(weekOffset: weekOffset)
-                let overallPct = viewModel.overallSuccessPercentage()
+            GeometryReader { proxy in
+                let isCompactWidth = proxy.size.width < 360
+                let dotSize: CGFloat = isCompactWidth ? 20 : 25
                 
-                VStack(spacing: 4) {
-                    Text(String(format: "All-Time Success: %.0f%%", overallPct))
-                        .font(.headline)
-                        .foregroundColor(overallPct < 34 ? .red : (overallPct < 67 ? .yellow : .green))
-                    Text(String(format: "Week Success: %.0f%%", weekPct))
-                        .font(.subheadline)
-                        .foregroundColor(weekPct < 34 ? .red : (weekPct < 67 ? .yellow : .green))
-                }
-                
-                HStack(spacing: 12) {
-                    Button {
-                        weekOffset -= 1
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .buttonStyle(.plain)
+                VStack(spacing: 12) {
+                    let weekPct = viewModel.weekSuccessPercentage(weekOffset: weekOffset)
+                    let overallPct = viewModel.overallSuccessPercentage()
                     
-                    Text(weekRangeTitle(weekOffset: weekOffset))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    Button {
-                        weekOffset += 1
-                    } label: {
-                        Image(systemName: "chevron.right")
+                    VStack(spacing: 4) {
+                        Text(String(format: "All-Time Success: %.0f%%", overallPct))
+                            .font(.headline)
+                            .foregroundColor(overallPct < 34 ? .red : (overallPct < 67 ? .yellow : .green))
+                        Text(String(format: "Week Success: %.0f%%", weekPct))
+                            .font(.subheadline)
+                            .foregroundColor(weekPct < 34 ? .red : (weekPct < 67 ? .yellow : .green))
                     }
-                    .buttonStyle(.plain)
-                }
-                
-                WeekdayHeaderRow(weekDates: viewModel.weekDates(for: weekOffset))
-                    .padding(.horizontal)
-                
-                List {
-                    ForEach(viewModel.habits) { habit in
-                        BirdsEyeHabitRow(habit: habit, weekDates: viewModel.weekDates(for: weekOffset)) {
-                            statsHabitId = habit.id
-                            showingStatsSheet = true
-                        } onShowNotes: {
-                            notesHabitId = habit.id
-                            notesText = habit.notes ?? ""
-                            showingNotesSheet = true
+                    
+                    HStack(spacing: 12) {
+                        Button {
+                            weekOffset -= 1
+                        } label: {
+                            Image(systemName: "chevron.left")
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Text(weekRangeTitle(weekOffset: weekOffset))
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Button {
+                            weekOffset += 1
+                        } label: {
+                            Image(systemName: "chevron.right")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
+                    WeekdayHeaderRow(weekDates: viewModel.weekDates(for: weekOffset), dotSize: dotSize)
+                        .padding(.horizontal)
+                    
+                    List {
+                        ForEach(viewModel.habits) { habit in
+                            BirdsEyeHabitRow(
+                                habit: habit,
+                                weekDates: viewModel.weekDates(for: weekOffset),
+                                dotSize: dotSize,
+                                isCompactWidth: isCompactWidth
+                            ) {
+                                statsHabitId = habit.id
+                                showingStatsSheet = true
+                            } onShowNotes: {
+                                notesText = habit.notes ?? ""
+                                notesSheet = NotesSheetContext(id: habit.id, title: habit.name)
+                            }
                         }
                     }
+                    .listStyle(PlainListStyle())
                 }
-                .listStyle(PlainListStyle())
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .navigationTitle("Bird's-Eye")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
@@ -619,19 +631,18 @@ struct BirdsEyeView: View {
                     .environmentObject(viewModel)
             }
         }
-        .sheet(isPresented: $showingNotesSheet, onDismiss: {
-            notesHabitId = nil
-        }) {
+        .sheet(item: $notesSheet) { sheet in
             NotesEditorSheet(
+                title: sheet.title,
                 notesText: $notesText,
                 onCancel: {
-                    showingNotesSheet = false
+                    notesText = ""
+                    notesSheet = nil
                 },
                 onSave: {
-                    if let habitId = notesHabitId {
-                        viewModel.updateNotes(id: habitId, notes: notesText)
-                    }
-                    showingNotesSheet = false
+                    viewModel.updateNotes(id: sheet.id, notes: notesText)
+                    notesText = ""
+                    notesSheet = nil
                 }
             )
         }
@@ -650,6 +661,7 @@ struct BirdsEyeView: View {
 
 struct WeekdayHeaderRow: View {
     let weekDates: [Date]
+    let dotSize: CGFloat
     
     var body: some View {
         let symbols = orderedWeekdaySymbols
@@ -668,7 +680,8 @@ struct WeekdayHeaderRow: View {
                         .font(.caption2)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
-                        .frame(width: 25)
+                        .dynamicTypeSize(.xSmall ... .large)
+                        .frame(width: dotSize)
                 }
             }
         }
@@ -686,54 +699,56 @@ struct BirdsEyeHabitRow: View {
     @EnvironmentObject var viewModel: HabitViewModel
     let habit: Habit
     let weekDates: [Date]
+    let dotSize: CGFloat
+    let isCompactWidth: Bool
     let onShowStats: () -> Void
     let onShowNotes: () -> Void
-    @State private var showingTitle = false
     
     var body: some View {
         HStack(spacing: 6) {
             HStack(spacing: 6) {
-                ZStack(alignment: .leading) {
-                    Text(habit.name)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .onTapGesture {
-                            showingTitle = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                showingTitle = false
-                            }
+                Text(habit.name)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                if isCompactWidth {
+                    Menu {
+                        Button {
+                            onShowStats()
+                        } label: {
+                            Label("Statistics", systemImage: "chart.bar")
                         }
-                    
-                    if showingTitle {
-                        Text(habit.name)
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .shadow(radius: 2)
-                            .transition(.opacity)
+                        Button {
+                            onShowNotes()
+                        } label: {
+                            Label("Notes", systemImage: "info.circle")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundColor(.secondary)
                     }
+                    .font(.caption2)
+                    .buttonStyle(.borderless)
+                } else {
+                    Button {
+                        onShowStats()
+                    } label: {
+                        Image(systemName: "chart.bar")
+                            .foregroundColor(.secondary)
+                    }
+                    .font(.caption2)
+                    .buttonStyle(.borderless)
+                    
+                    Button {
+                        onShowNotes()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.blue)
+                    }
+                    .buttonStyle(.borderless)
                 }
-                Button {
-                    onShowStats()
-                } label: {
-                    Image(systemName: "chart.bar")
-                        .foregroundColor(.secondary)
-                }
-                .font(.caption2)
-                .buttonStyle(.borderless)
-                
-                Button {
-                    onShowNotes()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .foregroundColor(.blue)
-                }
-                .buttonStyle(.borderless)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            WeekDotsRow(habit: habit, weekDates: weekDates)
+            WeekDotsRow(habit: habit, weekDates: weekDates, dotSize: dotSize)
         }
     }
 }
@@ -742,6 +757,7 @@ struct WeekDotsRow: View {
     @EnvironmentObject var viewModel: HabitViewModel
     let habit: Habit
     let weekDates: [Date]
+    let dotSize: CGFloat
     
     var body: some View {
         HStack(spacing: 6) {
@@ -758,7 +774,9 @@ struct WeekDotsRow: View {
         
         return Text("\(Calendar.current.component(.day, from: date))")
             .font(.caption2)
-            .frame(width: 25, height: 25)
+            .monospacedDigit()
+            .dynamicTypeSize(.xSmall ... .large)
+            .frame(width: dotSize, height: dotSize)
             .background(
                 Circle()
                     .foregroundColor(color)
@@ -891,6 +909,7 @@ struct HabitDetailView: View {
     @State private var showingRenameAlert = false
     @State private var renameText: String = ""
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingDeleteConfirmation = false
     @State private var showingRetryConfirmation = false
     @State private var showingNotesSheet = false
@@ -907,6 +926,16 @@ struct HabitDetailView: View {
     
     private var weekdaySymbols: [String] {
         calendar.shortWeekdaySymbols
+    }
+
+    private var calendarColumns: [GridItem] {
+        Array(repeating: GridItem(.fixed(calendarDotSize), spacing: calendarGridSpacing, alignment: .center), count: 7)
+    }
+
+    private var calendarGridSpacing: CGFloat { 10 }
+    private var calendarDotSize: CGFloat { 36 }
+    private var calendarGridWidth: CGFloat {
+        (calendarDotSize * 7) + (calendarGridSpacing * 6)
     }
     
     private var currentMonthYear: String {
@@ -945,146 +974,20 @@ struct HabitDetailView: View {
     }
 
     var body: some View {
-        HStack {
-            Spacer(minLength: 0)
+        ScrollView {
             VStack(spacing: 16) {
-            if let habit = habit {
-                HStack(spacing: 8) {
-                    Text(habit.name)
-                        .font(.title)
-                        .bold()
-                    
-                    Button {
-                        notesText = habit.notes ?? ""
-                        showingNotesSheet = true
-                    } label: {
-                        Image(systemName: "info.circle")
-                    }
-                    .buttonStyle(.borderless)
+                if let habit = habit {
+                    detailContent(for: habit, isCompactWidth: isCompactWidth)
+                } else {
+                    Text("Habit not found")
+                        .foregroundColor(.secondary)
                 }
-                .padding(.top)
-                
-                Text(currentMonthYear)
-                    .font(.headline)
-                    .padding(.top, 4)
-                
-                HStack {
-                    Button(action: {
-                        monthOffset -= 1
-                        FeedbackManager.shared.tap()
-                    }) {
-                        Image(systemName: "chevron.left")
-                    }
-                    .buttonStyle(.plain)
-                    Spacer()
-                    Button(action: {
-                        monthOffset += 1
-                        FeedbackManager.shared.tap()
-                    }) {
-                        Image(systemName: "chevron.right")
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal)
-                
-                // Weekday headers
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-                    ForEach(weekdaySymbols, id: \.self) { day in
-                        Text(day)
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                
-                // Calendar grid
-                let dates = getCurrentMonthDates()
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 12) {
-                    // Leading empty spaces
-                    ForEach(0..<leadingEmptyDaysCount(), id: \.self) { _ in
-                        Text("")
-                            .frame(height: 40)
-                    }
-                    
-                    ForEach(dates, id: \.self) { date in
-                        let dateString = dateFormatter.string(from: date)
-                        let completed = viewModel.isCompleted(habitId: habit.id, dateString: dateString)
-                        let color: Color = (completed == true) ? .green : ((completed == false) ? .red : .gray)
-
-                        Text("\(calendar.component(.day, from: date))")
-                            .frame(width: 36, height: 36)
-                            .background(
-                                Circle()
-                                    .foregroundColor(color)
-                            )
-                            .foregroundColor(.white)
-                            .overlay(
-                                Circle()
-                                    .stroke(Calendar.current.isDateInToday(date) ? Color.yellow : Color.clear, lineWidth: 2)
-                            )
-                            .onTapGesture {
-                                switch completed {
-                                case nil:
-                                    viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: true)
-                                    FeedbackManager.shared.success()
-                                case true:
-                                    viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: false)
-                                    FeedbackManager.shared.failure()
-                                case false:
-                                    viewModel.removeCompletion(habitId: habit.id, dateString: dateString)
-                                    FeedbackManager.shared.tap()
-                                }
-                            }
-                    }
-                }
-                .padding(.horizontal)
-                
-                Spacer()
-                
-                // Stats
-                VStack(alignment: .center, spacing: 6) {
-                    let lifetimePct = viewModel.successPercentage(for: habit)
-                    let streak = viewModel.currentStreak(for: habit)
-                    
-                    VStack(alignment: .center, spacing: 6) {
-                        Text("Current Streak: \(streak) day\(streak == 1 ? "" : "s")")
-                            .font(.subheadline)
-                            .bold()
-                        Text(String(format: "Success (All Time): %.0f%%", lifetimePct))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        if showingStats {
-                            Text("Total Successful Days: \(viewModel.totalSuccessfulDays(for: habit))")
-                                .font(.subheadline)
-                            Text("All-Time Streak: \(viewModel.allTimeStreak(for: habit)) days")
-                                .font(.subheadline)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showingStats.toggle()
-                        }
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .rotationEffect(.degrees(showingStats ? 180 : 0))
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal)
-                
-                Spacer()
-            } else {
-                Text("Habit not found")
-                    .foregroundColor(.secondary)
             }
-            }
-            .frame(maxWidth: 600)
-            Spacer(minLength: 0)
+            .frame(maxWidth: 600, alignment: .top)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .padding(.horizontal)
         }
+        .frame(maxWidth: .infinity, alignment: .top)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -1135,6 +1038,7 @@ struct HabitDetailView: View {
         }
         .sheet(isPresented: $showingNotesSheet) {
             NotesEditorSheet(
+                title: habit?.name ?? "",
                 notesText: $notesText,
                 onCancel: {
                     showingNotesSheet = false
@@ -1146,10 +1050,181 @@ struct HabitDetailView: View {
             )
         }
         .navigationTitle("Details")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    @ViewBuilder
+    private func detailContent(for habit: Habit, isCompactWidth: Bool) -> some View {
+        habitHeader(for: habit, isCompactWidth: isCompactWidth)
+        Text(currentMonthYear)
+            .font(.headline)
+            .padding(.top, 4)
+        monthNavigation
+        weekdayHeader
+        calendarGrid(for: habit)
+        Spacer(minLength: 12)
+        statsSection(for: habit)
+    }
+
+    private func habitHeader(for habit: Habit, isCompactWidth: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text(habit.name)
+                .font(.title)
+                .bold()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .dynamicTypeSize(.xSmall ... .xxLarge)
+            Button {
+                notesText = habit.notes ?? ""
+                showingNotesSheet = true
+            } label: {
+                Image(systemName: "info.circle")
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.top, headerTopPadding(isCompactWidth: isCompactWidth))
+    }
+
+    private func headerTopPadding(isCompactWidth: Bool) -> CGFloat {
+        if dynamicTypeSize.isAccessibilitySize || isCompactWidth {
+            return 25
+        }
+        return 75
+    }
+
+    private var isCompactWidth: Bool {
+        screenWidth > 0 ? screenWidth < 360 : true
+    }
+
+    private var screenWidth: CGFloat {
+        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? 0
+    }
+
+    private var monthNavigation: some View {
+        HStack {
+            Button(action: {
+                monthOffset -= 1
+                FeedbackManager.shared.tap()
+            }) {
+                Image(systemName: "chevron.left")
+            }
+            .buttonStyle(.plain)
+            Spacer()
+            Button(action: {
+                monthOffset += 1
+                FeedbackManager.shared.tap()
+            }) {
+                Image(systemName: "chevron.right")
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal)
+    }
+
+    private var weekdayHeader: some View {
+        HStack {
+            Spacer(minLength: 0)
+            LazyVGrid(columns: calendarColumns, spacing: calendarGridSpacing) {
+                ForEach(weekdaySymbols, id: \.self) { day in
+                    Text(day)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .dynamicTypeSize(.xSmall ... .large)
+                        .frame(width: calendarDotSize, alignment: .center)
+                }
+            }
+            .frame(width: calendarGridWidth)
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private func calendarGrid(for habit: Habit) -> some View {
+        let dates = getCurrentMonthDates()
+        HStack {
+            Spacer(minLength: 0)
+            LazyVGrid(columns: calendarColumns, spacing: calendarGridSpacing) {
+                ForEach(0..<leadingEmptyDaysCount(), id: \.self) { _ in
+                    Color.clear
+                        .frame(width: calendarDotSize, height: calendarDotSize)
+                }
+                ForEach(dates, id: \.self) { date in
+                    let dateString = dateFormatter.string(from: date)
+                    let completed = viewModel.isCompleted(habitId: habit.id, dateString: dateString)
+                    let color: Color = (completed == true) ? .green : ((completed == false) ? .red : .gray)
+
+                    Text("\(calendar.component(.day, from: date))")
+                        .frame(width: calendarDotSize, height: calendarDotSize)
+                        .background(
+                            Circle()
+                                .foregroundColor(color)
+                        )
+                        .foregroundColor(.white)
+                        .overlay(
+                            Circle()
+                                .stroke(Calendar.current.isDateInToday(date) ? Color.yellow : Color.clear, lineWidth: 2)
+                        )
+                        .onTapGesture {
+                            switch completed {
+                            case nil:
+                                viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: true)
+                                FeedbackManager.shared.success()
+                            case true:
+                                viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: false)
+                                FeedbackManager.shared.failure()
+                            case false:
+                                viewModel.removeCompletion(habitId: habit.id, dateString: dateString)
+                                FeedbackManager.shared.tap()
+                            }
+                        }
+                }
+            }
+            .frame(width: calendarGridWidth)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func statsSection(for habit: Habit) -> some View {
+        VStack(alignment: .center, spacing: 6) {
+            let lifetimePct = viewModel.successPercentage(for: habit)
+            let streak = viewModel.currentStreak(for: habit)
+
+            VStack(alignment: .center, spacing: 6) {
+                Text("Current Streak: \(streak) day\(streak == 1 ? "" : "s")")
+                    .font(.subheadline)
+                    .bold()
+                Text(String(format: "Success (All Time): %.0f%%", lifetimePct))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                if showingStats {
+                    Text("Total Successful Days: \(viewModel.totalSuccessfulDays(for: habit))")
+                        .font(.subheadline)
+                    Text("All-Time Streak: \(viewModel.allTimeStreak(for: habit)) days")
+                        .font(.subheadline)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showingStats.toggle()
+                }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .rotationEffect(.degrees(showingStats ? 180 : 0))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal)
     }
 }
 
 struct NotesEditorSheet: View {
+    let title: String
     @Binding var notesText: String
     let onCancel: () -> Void
     let onSave: () -> Void
@@ -1157,29 +1232,38 @@ struct NotesEditorSheet: View {
     
     var body: some View {
         NavigationView {
-            TextEditor(text: $notesText)
-                .padding()
-                .navigationTitle("Notes")
-                .onAppear {
-                    initialText = notesText
+            VStack(alignment: .leading, spacing: 10) {
+                if !title.isEmpty {
+                    Text(title)
+                        .font(.title3)
+                        .bold()
+                        .padding(.horizontal)
                 }
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            onCancel()
-                        } label: {
-                            Image(systemName: "chevron.left")
-                        }
+                TextEditor(text: $notesText)
+                    .padding()
+                    .onAppear {
+                        initialText = notesText
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            onSave()
-                        } label: {
-                            Image(systemName: "checkmark")
-                        }
-                        .disabled(notesText == initialText)
+                Spacer(minLength: 0)
+            }
+            .navigationTitle("Notes")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        onCancel()
+                    } label: {
+                        Image(systemName: "chevron.left")
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        onSave()
+                    } label: {
+                        Image(systemName: "checkmark")
+                    }
+                    .disabled(notesText == initialText)
+                }
+            }
         }
     }
 }
