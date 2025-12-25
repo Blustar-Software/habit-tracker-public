@@ -144,10 +144,12 @@ class HabitFileManager: NSObject, ObservableObject {
             let bookmarkData = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
             UserDefaults.standard.set(bookmarkData, forKey: bookmarkKey)
             UserDefaults.standard.set(url.path, forKey: originalPathKey) // Store original path
-            self.fileURL = url
-            needsFileSelection = false
-            startMonitoringFile(at: url)
-            refreshLastKnownModificationDate(for: url)
+            DispatchQueue.main.async {
+                self.fileURL = url
+                self.needsFileSelection = false
+                self.startMonitoringFile(at: url)
+                self.refreshLastKnownModificationDate(for: url)
+            }
         } catch {
             print("Error saving bookmark: \(error)")
         }
