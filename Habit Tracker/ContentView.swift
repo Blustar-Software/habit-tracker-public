@@ -54,6 +54,7 @@ struct Habit: Identifiable, Codable {
 struct NotesSheetContext: Identifiable {
     let id: UUID
     let title: String
+    let isArchived: Bool
 }
 
 struct StatsSheetContext: Identifiable {
@@ -362,6 +363,14 @@ class HabitViewModel: ObservableObject {
 }
 
 struct ContentView: View {
+    enum HabitFilter: String, CaseIterable, Identifiable {
+        case active = "Active"
+        case archived = "Archived"
+        case all = "All"
+        
+        var id: String { rawValue }
+    }
+    
     @StateObject var viewModel = HabitViewModel()
     @State private var newHabitName = ""
     @State private var selection = Set<UUID>()
@@ -384,7 +393,7 @@ struct ContentView: View {
     @State private var notesSheet: NotesSheetContext?
     @State private var showingBirdsEyeSheet = false
     @State private var hasEditChanges = false
-    @State private var showingArchived = false
+    @State private var selectedFilter: HabitFilter = .active
     
     var body: some View {
         rootView
@@ -406,6 +415,7 @@ struct ContentView: View {
         .sheet(item: $notesSheet) { sheet in
             NotesEditorSheet(
                 title: sheet.title,
+                isReadOnly: sheet.isArchived,
                 notesText: $notesText,
                 onCancel: {
                     notesText = ""
@@ -496,6 +506,14 @@ struct ContentView: View {
     
     private var mainContent: some View {
         VStack {
+            Picker("Filter", selection: $selectedFilter) {
+                ForEach(HabitFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.top, 6)
             habitList
         }
         .navigationTitle("Habits")
@@ -505,12 +523,13 @@ struct ContentView: View {
                     isEditing.toggle()
                     if isEditing {
                         hasEditChanges = false
+                        selectedFilter = .active
                     } else {
                         selection.removeAll()
                         hasEditChanges = false
                     }
                 }
-                .disabled(viewModel.activeHabits.isEmpty)
+                .disabled(viewModel.activeHabits.isEmpty || selectedFilter != .active)
                 .id(isEditing)
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -585,119 +604,113 @@ struct ContentView: View {
                 hasEditChanges = true
             }
         } else {
-            ForEach(viewModel.activeHabits) { habit in
+            ForEach(filteredHabits) { habit in
                 NavigationLink(destination: HabitDetailView(habitId: habit.id)
                     .environmentObject(viewModel)
                 ) {
                     MainHabitRow(viewModel: viewModel, habit: habit) {
                         notesText = habit.notes ?? ""
-                        notesSheet = NotesSheetContext(id: habit.id, title: habit.name)
+                        notesSheet = NotesSheetContext(id: habit.id, title: habit.name, isArchived: habit.isArchived)
                     }
                 }
                 .contextMenu {
-                    Button("Retry", systemImage: "arrow.clockwise") {
-                        pendingRetryHabitId = habit.id
-                        showingRetryConfirmation = true
-                    }
-                    Button("Archive", systemImage: "archivebox") {
-                        pendingArchiveHabitId = habit.id
-                        showingArchiveConfirmation = true
-                    }
-                    Button("Rename", systemImage: "pencil") {
-                        renameHabitId = habit.id
-                        renameText = habit.name
-                        showingRenameAlert = true
-                    }
-                    Button(role: .destructive) {
-                        pendingDeleteHabitId = habit.id
-                        showingSwipeDeleteConfirmation = true
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+                    if habit.isArchived {
+                        Button("Restore", systemImage: "arrow.uturn.backward") {
+                            pendingRestoreHabitId = habit.id
+                            showingRestoreConfirmation = true
+                        }
+                        Button(role: .destructive) {
+                            pendingDeleteHabitId = habit.id
+                            showingSwipeDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    } else {
+                        Button("Retry", systemImage: "arrow.clockwise") {
+                            pendingRetryHabitId = habit.id
+                            showingRetryConfirmation = true
+                        }
+                        Button("Archive", systemImage: "archivebox") {
+                            pendingArchiveHabitId = habit.id
+                            showingArchiveConfirmation = true
+                        }
+                        Button("Rename", systemImage: "pencil") {
+                            renameHabitId = habit.id
+                            renameText = habit.name
+                            showingRenameAlert = true
+                        }
+                        Button(role: .destructive) {
+                            pendingDeleteHabitId = habit.id
+                            showingSwipeDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button(role: .destructive) {
-                        pendingDeleteHabitId = habit.id
-                        showingSwipeDeleteConfirmation = true
-                    } label: {
-                        Image(systemName: "trash")
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if !habit.isArchived {
+                        Button(role: .destructive) {
+                            pendingDeleteHabitId = habit.id
+                            showingSwipeDeleteConfirmation = true
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        
+                        Button {
+                            renameHabitId = habit.id
+                            renameText = habit.name
+                            showingRenameAlert = true
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .tint(.blue)
+                    } else {
+                        Button(role: .destructive) {
+                            pendingDeleteHabitId = habit.id
+                            showingSwipeDeleteConfirmation = true
+                        } label: {
+                            Image(systemName: "trash")
+                        }
                     }
-                    
-                    Button {
-                        renameHabitId = habit.id
-                        renameText = habit.name
-                        showingRenameAlert = true
-                    } label: {
-                        Image(systemName: "pencil")
-                    }
-                    .tint(.blue)
                 }
-                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    Button {
-                        pendingRetryHabitId = habit.id
-                        showingRetryConfirmation = true
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    if habit.isArchived {
+                        Button {
+                            pendingRestoreHabitId = habit.id
+                            showingRestoreConfirmation = true
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward")
+                        }
+                        .tint(.blue)
+                    } else {
+                        Button {
+                            pendingRetryHabitId = habit.id
+                            showingRetryConfirmation = true
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .tint(.orange)
+                        Button {
+                            pendingArchiveHabitId = habit.id
+                            showingArchiveConfirmation = true
+                        } label: {
+                            Image(systemName: "archivebox")
+                        }
+                        .tint(.green)
                     }
-                    .tint(.orange)
-                    Button {
-                        pendingArchiveHabitId = habit.id
-                        showingArchiveConfirmation = true
-                    } label: {
-                        Image(systemName: "archivebox")
-                    }
-                    .tint(.green)
-                }
-            }
-            
-            if !viewModel.archivedHabits.isEmpty {
-                DisclosureGroup(isExpanded: $showingArchived) {
-                    ForEach(viewModel.archivedHabits) { habit in
-                        HStack {
-                            Text(habit.name)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Button("Restore") {
-                                pendingRestoreHabitId = habit.id
-                                showingRestoreConfirmation = true
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                        .contextMenu {
-                            Button("Restore", systemImage: "arrow.uturn.backward") {
-                                pendingRestoreHabitId = habit.id
-                                showingRestoreConfirmation = true
-                            }
-                            Button(role: .destructive) {
-                                pendingDeleteHabitId = habit.id
-                                showingSwipeDeleteConfirmation = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                            Button {
-                                pendingRestoreHabitId = habit.id
-                                showingRestoreConfirmation = true
-                            } label: {
-                                Image(systemName: "arrow.uturn.backward")
-                            }
-                            .tint(.blue)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                pendingDeleteHabitId = habit.id
-                                showingSwipeDeleteConfirmation = true
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                        }
-                    }
-                } label: {
-                    Text("Archived")
-                        .foregroundColor(.secondary)
                 }
             }
+        }
+    }
+
+    private var filteredHabits: [Habit] {
+        switch selectedFilter {
+        case .active:
+            return viewModel.activeHabits
+        case .archived:
+            return viewModel.archivedHabits
+        case .all:
+            return viewModel.activeHabits + viewModel.archivedHabits
         }
     }
     
@@ -710,9 +723,18 @@ struct BirdsEyeView: View {
     @State private var notesText = ""
     @State private var notesSheet: NotesSheetContext?
     @State private var statsSheet: StatsSheetContext?
+    @State private var showingRetryConfirmation = false
+    @State private var pendingRetryHabitId: UUID?
+    @State private var showingArchiveConfirmation = false
+    @State private var pendingArchiveHabitId: UUID?
+    @State private var showingDeleteConfirmation = false
+    @State private var pendingDeleteHabitId: UUID?
+    @State private var showingRenameAlert = false
+    @State private var renameHabitId: UUID?
+    @State private var renameText = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             GeometryReader { proxy in
                 let isCompactWidth = proxy.size.width < 360
                 let dotSize: CGFloat = isCompactWidth ? 20 : 25
@@ -733,6 +755,7 @@ struct BirdsEyeView: View {
                     HStack(spacing: 12) {
                         Button {
                             weekOffset -= 1
+                            FeedbackManager.shared.tap()
                         } label: {
                             Image(systemName: "chevron.left")
                         }
@@ -744,6 +767,7 @@ struct BirdsEyeView: View {
                         
                         Button {
                             weekOffset += 1
+                            FeedbackManager.shared.tap()
                         } label: {
                             Image(systemName: "chevron.right")
                         }
@@ -755,16 +779,33 @@ struct BirdsEyeView: View {
                     
                     List {
                         ForEach(viewModel.activeHabits) { habit in
-                            BirdsEyeHabitRow(
-                                habit: habit,
-                                weekDates: viewModel.weekDates(for: weekOffset),
-                                dotSize: dotSize,
-                                isCompactWidth: isCompactWidth
+                            NavigationLink(destination: HabitDetailView(habitId: habit.id)
+                                .environmentObject(viewModel)
                             ) {
-                                statsSheet = StatsSheetContext(id: habit.id)
-                            } onShowNotes: {
-                                notesText = habit.notes ?? ""
-                                notesSheet = NotesSheetContext(id: habit.id, title: habit.name)
+                                BirdsEyeHabitRow(
+                                    habit: habit,
+                                    weekDates: viewModel.weekDates(for: weekOffset),
+                                    dotSize: dotSize,
+                                    isCompactWidth: isCompactWidth
+                                ) {
+                                    statsSheet = StatsSheetContext(id: habit.id)
+                                } onShowNotes: {
+                                    notesText = habit.notes ?? ""
+                                    notesSheet = NotesSheetContext(id: habit.id, title: habit.name, isArchived: habit.isArchived)
+                                } onRetry: {
+                                    pendingRetryHabitId = habit.id
+                                    showingRetryConfirmation = true
+                                } onArchive: {
+                                    pendingArchiveHabitId = habit.id
+                                    showingArchiveConfirmation = true
+                                } onRename: {
+                                    renameHabitId = habit.id
+                                    renameText = habit.name
+                                    showingRenameAlert = true
+                                } onDelete: {
+                                    pendingDeleteHabitId = habit.id
+                                    showingDeleteConfirmation = true
+                                }
                             }
                         }
                     }
@@ -789,6 +830,7 @@ struct BirdsEyeView: View {
         .sheet(item: $notesSheet) { sheet in
             NotesEditorSheet(
                 title: sheet.title,
+                isReadOnly: sheet.isArchived,
                 notesText: $notesText,
                 onCancel: {
                     notesText = ""
@@ -800,6 +842,53 @@ struct BirdsEyeView: View {
                     notesSheet = nil
                 }
             )
+        }
+        .alert("Retry this habit? This resets its progress.", isPresented: $showingRetryConfirmation) {
+            Button("Retry") {
+                if let habitId = pendingRetryHabitId {
+                    viewModel.resetHabit(id: habitId)
+                    FeedbackManager.shared.tap()
+                }
+                pendingRetryHabitId = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingRetryHabitId = nil
+            }
+        }
+        .alert("Archive this habit?", isPresented: $showingArchiveConfirmation) {
+            Button("Archive") {
+                if let habitId = pendingArchiveHabitId {
+                    viewModel.archiveHabit(id: habitId)
+                }
+                pendingArchiveHabitId = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingArchiveHabitId = nil
+            }
+        }
+        .alert("Delete this habit?", isPresented: $showingDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                if let habitId = pendingDeleteHabitId {
+                    viewModel.deleteHabit(id: habitId)
+                    FeedbackManager.shared.error()
+                }
+                pendingDeleteHabitId = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeleteHabitId = nil
+            }
+        }
+        .alert("Rename Habit - Enter a new name", isPresented: $showingRenameAlert) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) {
+                renameHabitId = nil
+            }
+            Button("Save") {
+                if let habitId = renameHabitId {
+                    viewModel.renameHabit(id: habitId, newName: renameText)
+                }
+                renameHabitId = nil
+            }
         }
     }
     
@@ -858,6 +947,10 @@ struct BirdsEyeHabitRow: View {
     let isCompactWidth: Bool
     let onShowStats: () -> Void
     let onShowNotes: () -> Void
+    let onRetry: () -> Void
+    let onArchive: () -> Void
+    let onRename: () -> Void
+    let onDelete: () -> Void
     
     var body: some View {
         HStack(spacing: 6) {
@@ -865,44 +958,31 @@ struct BirdsEyeHabitRow: View {
                 Text(habit.name)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                if isCompactWidth {
-                    Menu {
-                        Button {
-                            onShowStats()
-                        } label: {
-                            Label("Statistics", systemImage: "chart.bar")
-                        }
-                        Button {
-                            onShowNotes()
-                        } label: {
-                            Label("Notes", systemImage: "info.circle")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .foregroundColor(.secondary)
-                    }
-                    .font(.caption2)
-                    .buttonStyle(.borderless)
-                } else {
-                    Button {
-                        onShowStats()
-                    } label: {
-                        Image(systemName: "chart.bar")
-                            .foregroundColor(.secondary)
-                    }
-                    .font(.caption2)
-                    .buttonStyle(.borderless)
-                    
-                    Button {
-                        onShowNotes()
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .foregroundColor(.blue)
-                    }
-                    .buttonStyle(.borderless)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contextMenu {
+                Button("Statistics", systemImage: "chart.bar") {
+                    onShowStats()
+                }
+                Button("Notes", systemImage: "info.circle") {
+                    onShowNotes()
+                }
+                Divider()
+                Button("Retry", systemImage: "arrow.clockwise") {
+                    onRetry()
+                }
+                Button("Archive", systemImage: "archivebox") {
+                    onArchive()
+                }
+                Button("Rename", systemImage: "pencil") {
+                    onRename()
+                }
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
             WeekDotsRow(habit: habit, weekDates: weekDates, dotSize: dotSize)
         }
     }
@@ -1013,6 +1093,17 @@ struct MainHabitRow: View {
     var body: some View {
         HStack {
             Text(habit.name)
+            if habit.isArchived {
+                Text("Archived")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(Color.gray.opacity(0.2))
+                    )
+            }
             
             Button {
                 onShowNotes()
@@ -1128,6 +1219,10 @@ struct HabitDetailView: View {
     private var habit: Habit? {
         viewModel.habits.first(where: { $0.id == habitId })
     }
+    
+    private var isReadOnly: Bool {
+        habit?.isArchived ?? false
+    }
 
     var body: some View {
         ScrollView {
@@ -1146,26 +1241,28 @@ struct HabitDetailView: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("Retry", systemImage: "arrow.clockwise") {
-                        showingRetryConfirmation = true
-                    }
-                    Button("Archive", systemImage: "archivebox") {
-                        showingArchiveConfirmation = true
-                    }
-                    Button("Rename", systemImage: "pencil") {
-                        if let habit = habit {
-                            renameText = habit.name
-                            showingRenameAlert = true
+                if !isReadOnly {
+                    Menu {
+                        Button("Retry", systemImage: "arrow.clockwise") {
+                            showingRetryConfirmation = true
                         }
-                    }
-                    Button(role: .destructive) {
-                        showingDeleteConfirmation = true
+                        Button("Archive", systemImage: "archivebox") {
+                            showingArchiveConfirmation = true
+                        }
+                        Button("Rename", systemImage: "pencil") {
+                            if let habit = habit {
+                                renameText = habit.name
+                                showingRenameAlert = true
+                            }
+                        }
+                        Button(role: .destructive) {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete Habit", systemImage: "trash")
+                        }
                     } label: {
-                        Label("Delete Habit", systemImage: "trash")
+                        Image(systemName: "ellipsis.circle")
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
                 }
             }
         }
@@ -1205,6 +1302,7 @@ struct HabitDetailView: View {
         .sheet(isPresented: $showingNotesSheet) {
             NotesEditorSheet(
                 title: habit?.name ?? "",
+                isReadOnly: isReadOnly,
                 notesText: $notesText,
                 onCancel: {
                     showingNotesSheet = false
@@ -1332,6 +1430,7 @@ struct HabitDetailView: View {
                                 .stroke(Calendar.current.isDateInToday(date) ? Color.yellow : Color.clear, lineWidth: 2)
                         )
                         .onTapGesture {
+                            guard !isReadOnly else { return }
                             switch completed {
                             case nil:
                                 viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: true)
@@ -1391,10 +1490,25 @@ struct HabitDetailView: View {
 
 struct NotesEditorSheet: View {
     let title: String
+    let isReadOnly: Bool
     @Binding var notesText: String
     let onCancel: () -> Void
     let onSave: () -> Void
     @State private var initialText = ""
+    
+    init(
+        title: String,
+        isReadOnly: Bool = false,
+        notesText: Binding<String>,
+        onCancel: @escaping () -> Void,
+        onSave: @escaping () -> Void
+    ) {
+        self.title = title
+        self.isReadOnly = isReadOnly
+        self._notesText = notesText
+        self.onCancel = onCancel
+        self.onSave = onSave
+    }
     
     var body: some View {
         NavigationView {
@@ -1407,6 +1521,7 @@ struct NotesEditorSheet: View {
                 }
                 TextEditor(text: $notesText)
                     .padding()
+                    .disabled(isReadOnly)
                     .onAppear {
                         initialText = notesText
                     }
@@ -1421,13 +1536,15 @@ struct NotesEditorSheet: View {
                         Image(systemName: "chevron.left")
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        onSave()
-                    } label: {
-                        Image(systemName: "checkmark")
+                if !isReadOnly {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            onSave()
+                        } label: {
+                            Image(systemName: "checkmark")
+                        }
+                        .disabled(notesText == initialText)
                     }
-                    .disabled(notesText == initialText)
                 }
             }
         }

@@ -1,4 +1,24 @@
-## v0.6.0 - Current
+## v0.6.2 - Current
+
+### Added
+- **Archive filter:** Main list now supports Active/Archived/All views.
+- **Archived indicator:** Archived habits show an "Archived" pill in the list.
+- **Archive actions:** Archive/restore/delete flows include confirmations, with swipe/context options.
+
+### Changed
+- **Archived behavior:** Archived habits open read-only in details; notes read-only and calendar taps disabled.
+- **Bird's-eye navigation:** Bird's-eye pushes into details inside the sheet and supports long-press menus.
+- **Bird's-eye stats sheet:** Statistics now open reliably on first tap.
+- **Document picker:** Removed success feedback when selecting a file.
+- **Details calendar layout:** Weekday header and grid alignment/spacing refinements.
+
+## v0.6.1
+
+### Changed
+- **Bird's-eye spacing:** Habit title layout adjusted to allow more room in compact widths.
+- **Notes sheets:** Habit name appears in notes sheets for clearer context.
+
+## v0.6.0
 
 ### Added
 - **Retry habit:** Swipe, long-press, or use the details menu to reset a habit’s progress with confirmation.

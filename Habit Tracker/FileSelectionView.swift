@@ -78,9 +78,6 @@ struct FileSelectionView: View {
         isProcessing = true
         fileManager.presentCreateFilePicker(from: viewController) { success in
             isProcessing = false
-            if success {
-                FeedbackManager.shared.success()
-            }
         }
     }
     
@@ -93,9 +90,6 @@ struct FileSelectionView: View {
         isProcessing = true
         fileManager.presentOpenFilePicker(from: viewController) { success in
             isProcessing = false
-            if success {
-                FeedbackManager.shared.success()
-            }
         }
     }
 }
