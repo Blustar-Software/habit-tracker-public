@@ -723,6 +723,7 @@ struct BirdsEyeView: View {
     @State private var notesText = ""
     @State private var notesSheet: NotesSheetContext?
     @State private var statsSheet: StatsSheetContext?
+    @State private var navigationPath: [UUID] = []
     @State private var showingRetryConfirmation = false
     @State private var pendingRetryHabitId: UUID?
     @State private var showingArchiveConfirmation = false
@@ -734,7 +735,7 @@ struct BirdsEyeView: View {
     @State private var renameText = ""
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             GeometryReader { proxy in
                 let isCompactWidth = proxy.size.width < 360
                 let dotSize: CGFloat = isCompactWidth ? 20 : 25
@@ -779,33 +780,32 @@ struct BirdsEyeView: View {
                     
                     List {
                         ForEach(viewModel.activeHabits) { habit in
-                            NavigationLink(destination: HabitDetailView(habitId: habit.id)
-                                .environmentObject(viewModel)
-                            ) {
-                                BirdsEyeHabitRow(
-                                    habit: habit,
-                                    weekDates: viewModel.weekDates(for: weekOffset),
-                                    dotSize: dotSize,
-                                    isCompactWidth: isCompactWidth
-                                ) {
-                                    statsSheet = StatsSheetContext(id: habit.id)
-                                } onShowNotes: {
-                                    notesText = habit.notes ?? ""
-                                    notesSheet = NotesSheetContext(id: habit.id, title: habit.name, isArchived: habit.isArchived)
-                                } onRetry: {
-                                    pendingRetryHabitId = habit.id
-                                    showingRetryConfirmation = true
-                                } onArchive: {
-                                    pendingArchiveHabitId = habit.id
-                                    showingArchiveConfirmation = true
-                                } onRename: {
-                                    renameHabitId = habit.id
-                                    renameText = habit.name
-                                    showingRenameAlert = true
-                                } onDelete: {
-                                    pendingDeleteHabitId = habit.id
-                                    showingDeleteConfirmation = true
+                            BirdsEyeHabitRow(
+                                habit: habit,
+                                weekDates: viewModel.weekDates(for: weekOffset),
+                                dotSize: dotSize,
+                                isCompactWidth: isCompactWidth,
+                                onOpenDetails: {
+                                    navigationPath.append(habit.id)
                                 }
+                            ) {
+                                statsSheet = StatsSheetContext(id: habit.id)
+                            } onShowNotes: {
+                                notesText = habit.notes ?? ""
+                                notesSheet = NotesSheetContext(id: habit.id, title: habit.name, isArchived: habit.isArchived)
+                            } onRetry: {
+                                pendingRetryHabitId = habit.id
+                                showingRetryConfirmation = true
+                            } onArchive: {
+                                pendingArchiveHabitId = habit.id
+                                showingArchiveConfirmation = true
+                            } onRename: {
+                                renameHabitId = habit.id
+                                renameText = habit.name
+                                showingRenameAlert = true
+                            } onDelete: {
+                                pendingDeleteHabitId = habit.id
+                                showingDeleteConfirmation = true
                             }
                         }
                     }
@@ -821,6 +821,10 @@ struct BirdsEyeView: View {
                         dismiss()
                     }
                 }
+            }
+            .navigationDestination(for: UUID.self) { habitId in
+                HabitDetailView(habitId: habitId)
+                    .environmentObject(viewModel)
             }
         }
         .sheet(item: $statsSheet) { sheet in
@@ -945,6 +949,7 @@ struct BirdsEyeHabitRow: View {
     let weekDates: [Date]
     let dotSize: CGFloat
     let isCompactWidth: Bool
+    let onOpenDetails: () -> Void
     let onShowStats: () -> Void
     let onShowNotes: () -> Void
     let onRetry: () -> Void
@@ -960,6 +965,10 @@ struct BirdsEyeHabitRow: View {
                     .minimumScaleFactor(0.6)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onOpenDetails()
+            }
             .contextMenu {
                 Button("Statistics", systemImage: "chart.bar") {
                     onShowStats()
