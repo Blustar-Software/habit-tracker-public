@@ -1,4 +1,15 @@
-## v0.6.2 - Current
+## v1.0.0 - Current
+
+### Added
+- **Archived workflow:** Active/Archived/All filter, archive/restore flows, and confirmation prompts.
+- **Bird's-eye navigation:** Bird's-eye now navigates into details inside the sheet.
+
+### Changed
+- **Archived read-only:** Archived habits open read-only with notes locked and calendar taps disabled.
+- **Bird's-eye menu:** Long-press menu for habit actions in bird's-eye view.
+- **Details calendar layout:** Weekday header and grid alignment/spacing refinements.
+
+## v0.6.2
 
 ### Added
 - **Archive filter:** Main list now supports Active/Archived/All views.

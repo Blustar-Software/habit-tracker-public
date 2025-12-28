@@ -32,10 +32,11 @@ Data Storage
 
 Habit data is stored in a user-selected `habits.json` file. You can keep it in iCloud Drive to sync across devices, and the app will reload when the file changes or is replaced at the same path.
 
-New in v0.6.0
+New in v1.0.0
 
-- Retry habit support with confirmation from swipe, long-press, and details view.
-- Unmarked habits show centered gray dashes for streak and all-time success.
+- Archived workflow with Active/Archived/All filter and restore flows.
+- Bird’s-eye navigation now opens details within the sheet.
+- Archived habits open read-only in details and notes.
 
 ⸻
 
