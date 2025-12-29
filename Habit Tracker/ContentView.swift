@@ -423,8 +423,6 @@ struct ContentView: View {
                 },
                 onSave: {
                     viewModel.updateNotes(id: sheet.id, notes: notesText)
-                    notesText = ""
-                    notesSheet = nil
                 }
             )
         }
@@ -842,8 +840,6 @@ struct BirdsEyeView: View {
                 },
                 onSave: {
                     viewModel.updateNotes(id: sheet.id, notes: notesText)
-                    notesText = ""
-                    notesSheet = nil
                 }
             )
         }
@@ -1318,7 +1314,6 @@ struct HabitDetailView: View {
                 },
                 onSave: {
                     viewModel.updateNotes(id: habitId, notes: notesText)
-                    showingNotesSheet = false
                 }
             )
         }
@@ -1549,10 +1544,20 @@ struct NotesEditorSheet: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             onSave()
+                            hideKeyboard()
+                            initialText = notesText
                         } label: {
                             Image(systemName: "checkmark")
                         }
                         .disabled(notesText == initialText)
+                    }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button {
+                        hideKeyboard()
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
                     }
                 }
             }
