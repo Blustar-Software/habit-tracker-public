@@ -7,7 +7,6 @@
 //
 
 import UIKit
-import AudioToolbox
 
 class FeedbackManager {
     static let shared = FeedbackManager()
@@ -16,7 +15,6 @@ class FeedbackManager {
     private let impactLightGenerator = UIImpactFeedbackGenerator(style: .light)
     private let impactMediumGenerator = UIImpactFeedbackGenerator(style: .medium)
     private let notificationGenerator = UINotificationFeedbackGenerator()
-
     private init() {
         selectionGenerator.prepare()
         impactLightGenerator.prepare()
@@ -54,26 +52,18 @@ class FeedbackManager {
 
     // A neutral, crisp tap sound. Good for selections or confirmations.
     func playNeutralSound() {
-        // System Sound ID 1104: "Tock"
-        AudioServicesPlaySystemSound(1104)
     }
     
     // A sound to indicate success.
     func playSuccessSound() {
-        // System Sound ID 1103: "Tink"
-        AudioServicesPlaySystemSound(1103)
     }
     
     // A sound for warnings or non-critical errors.
     func playWarningSound() {
-        // System Sound ID 1053: "oops"
-        AudioServicesPlaySystemSound(1053)
     }
     
     // A sound for failure.
     func playFailureSound() {
-        // System Sound ID 1105: "Tock" (different from 1104)
-        AudioServicesPlaySystemSound(1105)
     }
 
     // A sound for significant actions like deletion.

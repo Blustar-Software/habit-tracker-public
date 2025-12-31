@@ -1437,14 +1437,14 @@ struct HabitDetailView: View {
                             guard !isReadOnly else { return }
                             switch completed {
                             case nil:
-                                viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: true)
                                 FeedbackManager.shared.success()
+                                viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: true)
                             case true:
-                                viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: false)
                                 FeedbackManager.shared.failure()
+                                viewModel.markCompletion(habitId: habit.id, dateString: dateString, completed: false)
                             case false:
-                                viewModel.removeCompletion(habitId: habit.id, dateString: dateString)
                                 FeedbackManager.shared.tap()
+                                viewModel.removeCompletion(habitId: habit.id, dateString: dateString)
                             }
                         }
                 }

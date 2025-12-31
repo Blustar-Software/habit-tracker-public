@@ -1,4 +1,15 @@
-## v1.0.0 - Current
+## v1.0.2 - Current
+
+### Changed
+- **Feedback:** Removed system sounds; completion feedback now uses haptics only.
+- **Details completion tap:** Feedback triggers before persistence to reduce latency.
+
+## v1.0.1
+
+### Changed
+- **Notes workflow:** Saving notes no longer dismisses the sheet; the save button now hides the keyboard and disables after saving, with a keyboard toolbar dismiss button.
+
+## v1.0.0
 
 ### Added
 - **Archived workflow:** Active/Archived/All filter, archive/restore flows, and confirmation prompts.
