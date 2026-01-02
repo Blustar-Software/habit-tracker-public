@@ -418,7 +418,6 @@ struct ContentView: View {
                 isReadOnly: sheet.isArchived,
                 notesText: $notesText,
                 onCancel: {
-                    notesText = ""
                     notesSheet = nil
                 },
                 onSave: {
@@ -835,7 +834,6 @@ struct BirdsEyeView: View {
                 isReadOnly: sheet.isArchived,
                 notesText: $notesText,
                 onCancel: {
-                    notesText = ""
                     notesSheet = nil
                 },
                 onSave: {
@@ -1498,7 +1496,7 @@ struct NotesEditorSheet: View {
     @Binding var notesText: String
     let onCancel: () -> Void
     let onSave: () -> Void
-    @State private var initialText = ""
+    @State private var isKeyboardVisible = false
     
     init(
         title: String,
@@ -1526,8 +1524,9 @@ struct NotesEditorSheet: View {
                 TextEditor(text: $notesText)
                     .padding()
                     .disabled(isReadOnly)
-                    .onAppear {
-                        initialText = notesText
+                    .onChange(of: notesText) { _, _ in
+                        guard !isReadOnly else { return }
+                        onSave()
                     }
                 Spacer(minLength: 0)
             }
@@ -1540,27 +1539,21 @@ struct NotesEditorSheet: View {
                         Image(systemName: "chevron.left")
                     }
                 }
-                if !isReadOnly {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            onSave()
-                            hideKeyboard()
-                            initialText = notesText
-                        } label: {
-                            Image(systemName: "checkmark")
-                        }
-                        .disabled(notesText == initialText)
-                    }
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         hideKeyboard()
                     } label: {
-                        Image(systemName: "keyboard.chevron.compact.down")
+                        Image(systemName: "checkmark")
                     }
+                    .disabled(!isKeyboardVisible)
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            isKeyboardVisible = false
         }
     }
 }

@@ -1,4 +1,9 @@
-## v1.0.2 - Current
+## v1.0.3 - Current
+
+### Changed
+- **Notes auto-save:** Notes now persist without being cleared on dismiss; auto-save ignores read-only notes.
+
+## v1.0.2
 
 ### Changed
 - **Feedback:** Removed system sounds; completion feedback now uses haptics only.
