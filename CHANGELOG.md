@@ -1,5 +1,8 @@
 ## v1.0.3 - Current
 
+### Added
+- **Details habit navigation:** Added left/right chevrons beside the habit name to navigate between habits in order with wrap-around; respects Active vs Archived grouping.
+
 ### Changed
 - **Notes auto-save:** Notes now persist without being cleared on dismiss; auto-save ignores read-only notes.
 

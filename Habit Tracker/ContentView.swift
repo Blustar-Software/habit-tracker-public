@@ -644,7 +644,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     if !habit.isArchived {
                         Button(role: .destructive) {
                             pendingDeleteHabitId = habit.id
@@ -1151,7 +1151,10 @@ extension View {
 #endif
 
 struct HabitDetailView: View {
-    let habitId: UUID
+    @State private var currentHabitId: UUID
+    init(habitId: UUID) {
+        _currentHabitId = State(initialValue: habitId)
+    }
     @EnvironmentObject var viewModel: HabitViewModel
     @State private var monthOffset: Int = 0
     
@@ -1220,13 +1223,21 @@ struct HabitDetailView: View {
     }
     
     private var habit: Habit? {
-        viewModel.habits.first(where: { $0.id == habitId })
+        viewModel.habits.first(where: { $0.id == currentHabitId })
     }
     
     private var isReadOnly: Bool {
         habit?.isArchived ?? false
     }
-
+    
+    private var navigationHabits: [Habit] {
+        if habit?.isArchived == true {
+            return viewModel.archivedHabits
+        } else {
+            return viewModel.activeHabits
+        }
+    }
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -1280,14 +1291,14 @@ struct HabitDetailView: View {
         }
         .alert("Retry this habit? This resets its progress.", isPresented: $showingRetryConfirmation) {
             Button("Retry") {
-                viewModel.resetHabit(id: habitId)
+                viewModel.resetHabit(id: currentHabitId)
                 FeedbackManager.shared.tap()
             }
             Button("Cancel", role: .cancel) { }
         }
         .alert("Archive this habit?", isPresented: $showingArchiveConfirmation) {
             Button("Archive") {
-                viewModel.archiveHabit(id: habitId)
+                viewModel.archiveHabit(id: currentHabitId)
                 dismiss()
             }
             Button("Cancel", role: .cancel) { }
@@ -1311,7 +1322,7 @@ struct HabitDetailView: View {
                     showingNotesSheet = false
                 },
                 onSave: {
-                    viewModel.updateNotes(id: habitId, notes: notesText)
+                    viewModel.updateNotes(id: currentHabitId, notes: notesText)
                 }
             )
         }
@@ -1333,22 +1344,50 @@ struct HabitDetailView: View {
     }
 
     private func habitHeader(for habit: Habit, isCompactWidth: Bool) -> some View {
-        HStack(spacing: 8) {
-            Text(habit.name)
-                .font(.title)
-                .bold()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .dynamicTypeSize(.xSmall ... .xxLarge)
+        let canNavigate = navigationHabits.count > 1
+        return HStack(alignment: .center, spacing: 0) {
             Button {
-                notesText = habit.notes ?? ""
-                showingNotesSheet = true
+                navigateToPreviousHabit()
             } label: {
-                Image(systemName: "info.circle")
+                Image(systemName: "chevron.left")
+                    .frame(width: 44, height: 44)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
+            .disabled(!canNavigate)
+
+            Spacer(minLength: 12)
+
+            HStack(spacing: 8) {
+                Text(habit.name)
+                    .font(.title)
+                    .bold()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .dynamicTypeSize(.xSmall ... .xxLarge)
+
+                Button {
+                    notesText = habit.notes ?? ""
+                    showingNotesSheet = true
+                } label: {
+                    Image(systemName: "info.circle")
+                }
+                .buttonStyle(.borderless)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+
+            Spacer(minLength: 12)
+
+            Button {
+                navigateToNextHabit()
+            } label: {
+                Image(systemName: "chevron.right")
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canNavigate)
         }
         .padding(.top, headerTopPadding(isCompactWidth: isCompactWidth))
+        .padding(.horizontal)
     }
 
     private func headerTopPadding(isCompactWidth: Bool) -> CGFloat {
@@ -1356,6 +1395,22 @@ struct HabitDetailView: View {
             return 25
         }
         return 75
+    }
+
+    private func navigateToPreviousHabit() {
+        guard !navigationHabits.isEmpty,
+              let idx = navigationHabits.firstIndex(where: { $0.id == currentHabitId }) else { return }
+        let newIndex = (idx - 1 + navigationHabits.count) % navigationHabits.count
+        currentHabitId = navigationHabits[newIndex].id
+        FeedbackManager.shared.tap()
+    }
+
+    private func navigateToNextHabit() {
+        guard !navigationHabits.isEmpty,
+              let idx = navigationHabits.firstIndex(where: { $0.id == currentHabitId }) else { return }
+        let newIndex = (idx + 1) % navigationHabits.count
+        currentHabitId = navigationHabits[newIndex].id
+        FeedbackManager.shared.tap()
     }
 
     private var isCompactWidth: Bool {
@@ -1561,3 +1616,4 @@ struct NotesEditorSheet: View {
 #Preview {
     ContentView()
 }
+
