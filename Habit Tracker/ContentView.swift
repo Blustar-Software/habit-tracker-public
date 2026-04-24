@@ -15,13 +15,15 @@ struct Habit: Identifiable, Codable {
     var completion: [String: Bool] = [:] // key: date string (e.g., "2025-11-25")
     var notes: String? = nil
     var isArchived: Bool = false
+    let createdAt: Date
     
-    init(id: UUID = UUID(), name: String, completion: [String: Bool] = [:], notes: String? = nil, isArchived: Bool = false) {
+    init(id: UUID = UUID(), name: String, completion: [String: Bool] = [:], notes: String? = nil, isArchived: Bool = false, createdAt: Date = Date()) {
         self.id = id
         self.name = name
         self.completion = completion
         self.notes = notes
         self.isArchived = isArchived
+        self.createdAt = createdAt
     }
     
     enum CodingKeys: String, CodingKey {
@@ -30,6 +32,7 @@ struct Habit: Identifiable, Codable {
         case completion
         case notes
         case isArchived
+        case createdAt
     }
     
     init(from decoder: Decoder) throws {
@@ -39,6 +42,7 @@ struct Habit: Identifiable, Codable {
         completion = try container.decodeIfPresent([String: Bool].self, forKey: .completion) ?? [:]
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
     }
     
     func encode(to encoder: Encoder) throws {
@@ -48,6 +52,7 @@ struct Habit: Identifiable, Codable {
         try container.encode(completion, forKey: .completion)
         try container.encodeIfPresent(notes, forKey: .notes)
         try container.encode(isArchived, forKey: .isArchived)
+        try container.encode(createdAt, forKey: .createdAt)
     }
 }
 
@@ -62,12 +67,26 @@ struct StatsSheetContext: Identifiable {
 }
 
 class HabitViewModel: ObservableObject {
+    enum SortOrder: String, CaseIterable, Identifiable {
+        case manual = "Manual"
+        case successRate = "Sorted"
+        var id: String { rawValue }
+    }
+    
     @Published var habits: [Habit] = []
+    @Published var sortOrder: SortOrder {
+        didSet {
+            UserDefaults.standard.set(sortOrder.rawValue, forKey: "HabitSortOrder")
+        }
+    }
     
     private let fileManager = HabitFileManager.shared
     private var fileChangeObserver: AnyCancellable?
     
     init() {
+        let savedSort = UserDefaults.standard.string(forKey: "HabitSortOrder") ?? SortOrder.manual.rawValue
+        self.sortOrder = SortOrder(rawValue: savedSort) ?? .manual
+        
         loadHabits()
         fileChangeObserver = NotificationCenter.default.publisher(for: HabitFileManager.fileDidChangeNotification)
             .receive(on: DispatchQueue.main)
@@ -92,7 +111,8 @@ class HabitViewModel: ObservableObject {
             name: trimmed,
             completion: habits[index].completion,
             notes: habits[index].notes,
-            isArchived: habits[index].isArchived
+            isArchived: habits[index].isArchived,
+            createdAt: habits[index].createdAt
         )
         saveHabits()
     }
@@ -147,7 +167,8 @@ class HabitViewModel: ObservableObject {
             name: habits[index].name,
             completion: [:],
             notes: habits[index].notes,
-            isArchived: habits[index].isArchived
+            isArchived: habits[index].isArchived,
+            createdAt: habits[index].createdAt
         )
         saveHabits()
     }
@@ -161,7 +182,8 @@ class HabitViewModel: ObservableObject {
             name: habits[index].name,
             completion: habits[index].completion,
             notes: updatedNotes,
-            isArchived: habits[index].isArchived
+            isArchived: habits[index].isArchived,
+            createdAt: habits[index].createdAt
         )
         saveHabits()
     }
@@ -340,24 +362,62 @@ class HabitViewModel: ObservableObject {
     }
     
     var activeHabits: [Habit] {
-        habits.filter { !$0.isArchived }
+        let list = habits.filter { !$0.isArchived }
+        return sortHabits(list)
     }
     
     var archivedHabits: [Habit] {
-        habits.filter { $0.isArchived }
+        let list = habits.filter { $0.isArchived }
+        return sortHabits(list)
+    }
+
+    private func sortHabits(_ list: [Habit]) -> [Habit] {
+        switch sortOrder {
+        case .manual:
+            return list
+        case .successRate:
+            return list.sorted { h1, h2 in
+                let p1 = successPercentage(for: h1)
+                let p2 = successPercentage(for: h2)
+                if p1 != p2 {
+                    return p1 > p2
+                }
+                return h1.createdAt < h2.createdAt
+            }
+        }
     }
     
     func archiveHabit(id: UUID) {
         guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
         habits[index].isArchived = true
-        habits = activeHabits + archivedHabits
+        habits = habits.filter { !$0.isArchived } + habits.filter { $0.isArchived } // Keep relative manual order if possible
+        saveHabits()
+    }
+
+    func archiveHabits(ids: Set<UUID>) {
+        for id in ids {
+            if let index = habits.firstIndex(where: { $0.id == id }) {
+                habits[index].isArchived = true
+            }
+        }
+        habits = habits.filter { !$0.isArchived } + habits.filter { $0.isArchived }
         saveHabits()
     }
     
     func restoreHabit(id: UUID) {
         guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
         habits[index].isArchived = false
-        habits = activeHabits + archivedHabits
+        habits = habits.filter { !$0.isArchived } + habits.filter { $0.isArchived }
+        saveHabits()
+    }
+
+    func restoreHabits(ids: Set<UUID>) {
+        for id in ids {
+            if let index = habits.firstIndex(where: { $0.id == id }) {
+                habits[index].isArchived = false
+            }
+        }
+        habits = habits.filter { !$0.isArchived } + habits.filter { $0.isArchived }
         saveHabits()
     }
 }
@@ -394,6 +454,17 @@ struct ContentView: View {
     @State private var showingBirdsEyeSheet = false
     @State private var hasEditChanges = false
     @State private var selectedFilter: HabitFilter = .active
+    @State private var showingResetSelectionConfirmation = false
+    @State private var showingBulkArchiveConfirmation = false
+    @State private var showingBulkRestoreConfirmation = false
+    
+    private var activeSelectedCount: Int {
+        viewModel.habits.filter { selection.contains($0.id) && !$0.isArchived }.count
+    }
+    
+    private var archivedSelectedCount: Int {
+        viewModel.habits.filter { selection.contains($0.id) && $0.isArchived }.count
+    }
     
     var body: some View {
         rootView
@@ -461,6 +532,41 @@ struct ContentView: View {
                 pendingRetryHabitId = nil
             }
         }
+        .alert("Reset selected habits?", isPresented: $showingResetSelectionConfirmation) {
+            Button("Reset", role: .destructive) {
+                for id in selection {
+                    viewModel.resetHabit(id: id)
+                }
+                FeedbackManager.shared.tap()
+                selection.removeAll()
+                withAnimation {
+                    isEditing = false
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .alert("Archive \(activeSelectedCount) active habit\(activeSelectedCount == 1 ? "" : "s")?", isPresented: $showingBulkArchiveConfirmation) {
+            Button("Archive") {
+                let activeIds = Set(viewModel.habits.filter { selection.contains($0.id) && !$0.isArchived }.map { $0.id })
+                viewModel.archiveHabits(ids: activeIds)
+                selection.removeAll()
+                withAnimation {
+                    isEditing = false
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .alert("Restore \(archivedSelectedCount) archived habit\(archivedSelectedCount == 1 ? "" : "s")?", isPresented: $showingBulkRestoreConfirmation) {
+            Button("Restore") {
+                let archivedIds = Set(viewModel.habits.filter { selection.contains($0.id) && $0.isArchived }.map { $0.id })
+                viewModel.restoreHabits(ids: archivedIds)
+                selection.removeAll()
+                withAnimation {
+                    isEditing = false
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
         .alert("Archive this habit?", isPresented: $showingArchiveConfirmation) {
             Button("Archive") {
                 if let habitId = pendingArchiveHabitId {
@@ -502,7 +608,7 @@ struct ContentView: View {
     }
     
     private var mainContent: some View {
-        VStack {
+        VStack(spacing: 8) {
             Picker("Filter", selection: $selectedFilter) {
                 ForEach(HabitFilter.allCases) { filter in
                     Text(filter.rawValue).tag(filter)
@@ -511,40 +617,94 @@ struct ContentView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.top, 6)
+            
             habitList
         }
         .navigationTitle("Habits")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItemGroup(placement: .topBarLeading) {
+                if isEditing {
+                    let allSelected = !filteredHabits.isEmpty && selection.count == filteredHabits.count
+                    Button(allSelected ? "Deselect All" : "Select All") {
+                        if allSelected {
+                            selection.removeAll()
+                        } else {
+                            selection = Set(filteredHabits.map { $0.id })
+                        }
+                    }
+                    .disabled(filteredHabits.isEmpty)
+                }
+                
                 Button(editButtonTitle) {
                     isEditing.toggle()
                     if isEditing {
                         hasEditChanges = false
-                        selectedFilter = .active
                     } else {
                         selection.removeAll()
                         hasEditChanges = false
                     }
                 }
-                .disabled(viewModel.activeHabits.isEmpty || selectedFilter != .active)
+                .disabled(filteredHabits.isEmpty)
                 .id(isEditing)
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    showingBirdsEyeSheet = true
-                } label: {
-                    Image(systemName: "bird")
-                }
-                .disabled(isEditing)
                 if isEditing {
-                    Button(role: .destructive) {
-                        habitIDsToDelete = selection
-                        showingBulkDeleteConfirmation = true
+                    Menu {
+                        Button {
+                            showingResetSelectionConfirmation = true
+                        } label: {
+                            Label("Reset Selection", systemImage: "arrow.clockwise")
+                        }
+                        
+                        let selectedHabits = viewModel.habits.filter { selection.contains($0.id) }
+                        let hasActiveInSelection = selectedHabits.contains(where: { !$0.isArchived })
+                        let hasArchivedInSelection = selectedHabits.contains(where: { $0.isArchived })
+                        
+                        if hasActiveInSelection {
+                            Button {
+                                showingBulkArchiveConfirmation = true
+                            } label: {
+                                Label("Archive \(activeSelectedCount) Active", systemImage: "archivebox")
+                            }
+                        }
+                        
+                        if hasArchivedInSelection {
+                            Button {
+                                showingBulkRestoreConfirmation = true
+                            } label: {
+                                Label("Restore \(archivedSelectedCount) Archived", systemImage: "arrow.uturn.backward")
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        Button(role: .destructive) {
+                            habitIDsToDelete = selection
+                            showingBulkDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        Image(systemName: "ellipsis.circle")
                     }
                     .disabled(selection.isEmpty)
                 } else {
+                    Button {
+                        showingBirdsEyeSheet = true
+                    } label: {
+                        Image(systemName: "bird")
+                    }
+
+                    Menu {
+                        Picker("Sort Order", selection: $viewModel.sortOrder) {
+                            ForEach(HabitViewModel.SortOrder.allCases) { order in
+                                Text(order.rawValue).tag(order)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                    }
+                    
                     Button {
                         showingAddHabitSheet = true
                     } label: {
@@ -573,7 +733,7 @@ struct ContentView: View {
     @ViewBuilder
     private var habitListRows: some View {
         if isEditing {
-            ForEach(viewModel.activeHabits) { habit in
+            ForEach(filteredHabits) { habit in
                 HStack {
                     if selection.contains(habit.id) {
                         Image(systemName: "checkmark.circle.fill")
@@ -582,7 +742,7 @@ struct ContentView: View {
                         Image(systemName: "circle")
                             .foregroundColor(.gray)
                     }
-                    
+
                     Text(habit.name)
                     Spacer()
                 }
@@ -597,11 +757,12 @@ struct ContentView: View {
                 }
             }
             .onMove { source, destination in
-                viewModel.moveActiveHabits(from: source, to: destination)
-                hasEditChanges = true
+                if viewModel.sortOrder == .manual && selectedFilter == .active {
+                    viewModel.moveActiveHabits(from: source, to: destination)
+                    hasEditChanges = true
+                }
             }
-        } else {
-            ForEach(filteredHabits) { habit in
+        } else {            ForEach(filteredHabits) { habit in
                 NavigationLink(destination: HabitDetailView(habitId: habit.id)
                     .environmentObject(viewModel)
                 ) {

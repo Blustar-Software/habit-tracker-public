@@ -34,3 +34,15 @@ The project follows a Model-View-ViewModel (MVVM) architecture, with `ContentVie
 *   **`Codable`:** The `Habit` model conforms to the `Codable` protocol for easy serialization to and from `UserDefaults`.
 *   **Feedback:** A `FeedbackManager` singleton is used to centralize haptic and sound feedback.
 *   **Minimalist Design:** The `README.md` emphasizes a minimalist and symbolic design ethos.
+
+## Future Roadmap (iOS 26 Refactor)
+
+A proposal has been drafted to align the app with the **Liquid Glass** design system introduced in iOS 26.
+
+### Key Objectives:
+*   **Visual Overhaul:** Transition from flat design to a tactile, refractive aesthetic.
+*   **Dynamic Backgrounds:** Implement `MeshGradient` to provide color depth for glass refraction.
+*   **GlassMorphing:** Use `GlassEffectContainer` and `.glassEffect()` modifiers to allow UI elements (like habit cards and toolbars) to "melt" and merge organically.
+*   **Interactive Physics:** Add surface-tension animations and haptic feedback synchronized with the "liquid" feel of the interface.
+
+*Note: Implementing this roadmap requires bumping the deployment target to iOS 26.0.*
