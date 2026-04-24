@@ -1,87 +1,76 @@
-Blustar Software – Habit Tracker
+# Habit Tracker
 
-© Blustar Software
+*© Blustar Software*
 
-⸻
+## Overview
 
-Overview
+Habit Tracker is an intuitive iOS application designed to help users build and maintain positive habits through a framework of Implicit Intent. Unlike trackers that penalize you for every day you don’t log, this app respects the distinction between a "failed" day and a "non-habit" day.
 
-Habit Tracker is an intuitive iOS application designed to help users build and maintain positive habits. With a clean interface, users can easily add, track, and manage their daily habits. 
-Key features include a detailed calendar view for tracking daily completion, a dynamic streak indicator to motivate progress, and success percentages that provide at-a-glance performance insights. 
-The app supports habit reordering, advanced sorting, bulk management (archive, restore, delete), and provides subtle haptic and sound feedback for a satisfying user experience.
+Key features include a detailed calendar view, a dynamic streak indicator, success percentages, and a "Bird’s-Eye" progress view. The app supports habit reordering, advanced sorting, and bulk management, all delivered with subtle haptic and sound feedback.
 
-⸻
+## 🧠 Philosophy: Implicit Intent
 
-Philosophy
+Blustar Software values clarity, symbolic design, and purposeful interaction. Most trackers fail because they treat every day as a "habit day," leading to "streak fatigue." This project reflects a more deliberate framework:
 
-Blustar Software values clarity, symbolic design, and purposeful interaction. Every element of this project—from interface to code—reflects a deliberate framework for deep engagement.
+•    Green: You showed up and did it.
+•    Red: You intended to do it, but didn't (The streak resets).
+•    Unmarked: You never intended to do it today. (The streak stays alive).
 
-⸻
+Every element of this project—from interface to code—is designed to support this reality of flexible, sustainable habit building.
 
-Installation
-  1. Clone the repository:
+## 🛠 Installation & Developer Setup
 
-```git clone https://github.com/Blustar-Software/Habit-Tracker.git```
+This project is shared as-is for local deployment via Xcode. To get it running on your device:
 
-  2. Open Habit Tracker.xcodeproj in Xcode (15+ recommended).
-  3. Build and run on your device or simulator.
-(Requires a personal Apple developer team for local builds.)
+    1.    Clone the repository:
+    2.    Open in Xcode: Open Habit Tracker.xcodeproj (Xcode 15+ recommended).
+    3.    Configure Signing: Because this is a private project, you must go to Target > Signing & Capabilities, update the Bundle Identifier to a unique string, and select your own Personal Development Team.
+    4.    Build and Run: Connect your iPhone or use the Simulator and hit Cmd + R.
 
-Data Storage
+## 📂 Data Sovereignty
 
-Habit data is stored in a user-selected `habits.json` file. You can keep it in iCloud Drive to sync across devices, and the app will reload when the file changes or is replaced at the same path.
+Your habit data is stored in a user-selected habits.json file.
+•    Ownership: Your data is a flat JSON file, not a hidden database.
+•    Privacy by Design: To avoid the complexities and privacy trade-offs of cloud syncing, the app is currently single-device.
+•    Local Storage: You can store your habit file directly in the "On My iPhone" local directory. This keeps your data entirely offline, off-grid, and under your physical control.
+•    Live Updates: The app automatically reloads when the file is modified or replaced at the same path.
 
-New in v1.1.1
+## New in v1.1.1
 
-- **Advanced Sorting:** Toggle between "Manual" and "Sorted" (by success rate) via the new toolbar menu.
-- **Bulk Management:** New "Actions" menu in edit mode for bulk archiving, restoring, and resetting habits.
-- **Select All:** Quickly select or deselect your entire filtered list in edit mode.
-- **Sound Restoration:** Re-implemented native system sounds for completion feedback.
-- **Stabilized Bird's-Eye:** Habit order now remains stable while checking days in the Bird's-Eye view.
+•    Advanced Sorting: Toggle between "Manual" and "Sorted" (by success rate).
+•    Bulk Management: New "Actions" menu for archiving, restoring, and resetting habits.
+•    Select All: Quickly manage your entire list in edit mode.
+•    Sound Restoration: Re-implemented native system sounds for completion feedback.
+•    Stabilized Bird's-Eye: Fixed ordering issues when toggling days in high-level view.
 
-⸻
+## Usage
 
-Usage
+1. Tracking Habit Completion:
 
-**1. Adding a New Habit:**
-   - Tap the '+' icon in the top-right corner of the main screen.
-   - Enter the name of your new habit and tap 'Add'.
+In the calendar view, tap a day to cycle through status:
+•    Green: Completed.
+•    Red: Unsuccessful (Intent was present, action was not).
+•    Gray: Unmarked (Neutral/No Intent).
+•    The current day is highlighted with a yellow ring.
 
-**2. Tracking Habit Completion:**
-   - On the main list, tap any habit to view its details.
-   - In the calendar view, tap a day to mark it as completed (green circle), unsuccessful (red circle), or unmarked (gray circle).
-   - The current day is highlighted with a yellow ring.
+*Note: it is recommended that you write your intentions in the notes section for each habit, or elsewhere*
 
-**3. Sorting and Filtering:**
-   - **Filter:** Use the segmented picker at the top to view Active, Archived, or All habits.
-   - **Sort:** Tap the sort icon (up/down arrows) in the toolbar to switch between Manual (custom order) and Sorted (success rate) views.
+2. Bird's-Eye View:
 
-**4. Bulk Management (Edit Mode):**
-   - Tap 'Edit' to enter selection mode.
-   - Use 'Select All' in the top-left to manage your entire list at once.
-   - Access the 'Actions' (ellipsis) menu to Archive, Restore, Reset, or Delete selected habits. The menu intelligently shows only valid actions for your selection.
+Tap the bird icon for a high-level cross-habit view of your week. You can toggle completion status directly from this view.
 
-**5. Bird's-Eye View:**
-   - Tap the bird icon to see a high-level view of your week's progress across all habits. 
-   - Tap any dot to quickly toggle completion status without leaving the view.
+3. Sorting and Filtering:
 
-⸻
+Use the segmented picker for Active/Archived status, and the sort icon to switch between Manual and Success Rate sorting.
 
-Future Roadmap
+## Future Roadmap
 
-- Implement Liquid Glass UI
-- Enable cloud syncing, with adequate conflict resolution, to enable use across devices
-- Fix bugs
+•    Implement Liquid Glass UI
+•    Enable cloud syncing with robust conflict resolution
+•    Fix bugs
 
-⸻
+### Contributing & License
 
-Contributing
+Blustar Software projects are currently single-author. Contributions are welcome via forks or suggestions that respect the minimalist and symbolic design ethos.
 
-Blustar Software projects are currently single-author. Contributions are welcome via forks or suggestions.
-Respect the minimalist and symbolic design ethos when proposing changes.
-
-⸻
-
-License
-
-© Blustar Software. All rights reserved.
+*© Blustar Software. All rights reserved.*
