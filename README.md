@@ -8,8 +8,7 @@ Overview
 
 Habit Tracker is an intuitive iOS application designed to help users build and maintain positive habits. With a clean interface, users can easily add, track, and manage their daily habits. 
 Key features include a detailed calendar view for tracking daily completion, a dynamic streak indicator to motivate progress, and success percentages that provide at-a-glance performance insights. 
-The app supports habit reordering, bulk deletion, and provides subtle haptic and sound feedback for a satisfying user
-  experience.
+The app supports habit reordering, advanced sorting, bulk management (archive, restore, delete), and provides subtle haptic and sound feedback for a satisfying user experience.
 
 ⸻
 
@@ -32,11 +31,13 @@ Data Storage
 
 Habit data is stored in a user-selected `habits.json` file. You can keep it in iCloud Drive to sync across devices, and the app will reload when the file changes or is replaced at the same path.
 
-New in v1.0.0
+New in v1.1.1
 
-- Archived workflow with Active/Archived/All filter and restore flows.
-- Bird’s-eye navigation now opens details within the sheet.
-- Archived habits open read-only in details and notes.
+- **Advanced Sorting:** Toggle between "Manual" and "Sorted" (by success rate) via the new toolbar menu.
+- **Bulk Management:** New "Actions" menu in edit mode for bulk archiving, restoring, and resetting habits.
+- **Select All:** Quickly select or deselect your entire filtered list in edit mode.
+- **Sound Restoration:** Re-implemented native system sounds for completion feedback.
+- **Stabilized Bird's-Eye:** Habit order now remains stable while checking days in the Bird's-Eye view.
 
 ⸻
 
@@ -51,20 +52,26 @@ Usage
    - In the calendar view, tap a day to mark it as completed (green circle), unsuccessful (red circle), or unmarked (gray circle).
    - The current day is highlighted with a yellow ring.
 
-**3. Navigating Months:**
-   - Use the left and right chevron buttons above the calendar to move between months.
+**3. Sorting and Filtering:**
+   - **Filter:** Use the segmented picker at the top to view Active, Archived, or All habits.
+   - **Sort:** Tap the sort icon (up/down arrows) in the toolbar to switch between Manual (custom order) and Sorted (success rate) views.
 
-**4. Understanding Habit Metrics:**
-   - **Current Streak:** A colored circle next to the habit name on the main list displays your current consecutive streak (green for >0, red for 0). Streaks over 99 days show as "99+".
-   - **Success Percentage:** The percentage next to the streak circle indicates your all-time success rate for that habit, color-coded for quick assessment (red: 0-33%, yellow: 34-66%, green: 67-100%).
+**4. Bulk Management (Edit Mode):**
+   - Tap 'Edit' to enter selection mode.
+   - Use 'Select All' in the top-left to manage your entire list at once.
+   - Access the 'Actions' (ellipsis) menu to Archive, Restore, Reset, or Delete selected habits. The menu intelligently shows only valid actions for your selection.
 
-**5. Editing and Deleting Habits:**
-   - **Rename/Delete Single Habit:** From the habit's detail view, tap the '...' (ellipsis) icon in the top-right corner to access options for renaming or deleting the habit.
-   - **Bulk Delete Habits:** On the main screen, tap 'Edit' (top-left) to enter selection mode. Select multiple habits and then tap the trash can icon (top-right) to delete them.
-   - **Swipe to Delete:** On the main screen (not in edit mode), swipe left on a habit to reveal a 'Delete' option.
+**5. Bird's-Eye View:**
+   - Tap the bird icon to see a high-level view of your week's progress across all habits. 
+   - Tap any dot to quickly toggle completion status without leaving the view.
 
-**6. Reordering Habits:**
-   - On the main screen, tap 'Edit' (top-left). Once in edit mode, drag and drop habits to reorder them in your list.
+⸻
+
+Future Roadmap
+
+- Implement Liquid Glass UI
+- Enable cloud syncing, with adequate conflict resolution, to enable use across devices
+- Fix bugs
 
 ⸻
 

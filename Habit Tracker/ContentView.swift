@@ -9,13 +9,13 @@
 import SwiftUI
 import Combine
 
-struct Habit: Identifiable, Codable {
+struct Habit: Identifiable, Codable, Equatable {
     let id: UUID
     let name: String
     var completion: [String: Bool] = [:] // key: date string (e.g., "2025-11-25")
     var notes: String? = nil
     var isArchived: Bool = false
-    let createdAt: Date
+    var createdAt: Date = Date()
     
     init(id: UUID = UUID(), name: String, completion: [String: Bool] = [:], notes: String? = nil, isArchived: Bool = false, createdAt: Date = Date()) {
         self.id = id
@@ -891,6 +891,7 @@ struct BirdsEyeView: View {
     @State private var showingRenameAlert = false
     @State private var renameHabitId: UUID?
     @State private var renameText = ""
+    @State private var stableHabits: [Habit] = []
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -937,7 +938,7 @@ struct BirdsEyeView: View {
                         .padding(.horizontal)
                     
                     List {
-                        ForEach(viewModel.activeHabits) { habit in
+                        ForEach(stableHabits) { habit in
                             BirdsEyeHabitRow(
                                 habit: habit,
                                 weekDates: viewModel.weekDates(for: weekOffset),
@@ -984,6 +985,12 @@ struct BirdsEyeView: View {
                 HabitDetailView(habitId: habitId)
                     .environmentObject(viewModel)
             }
+        }
+        .onAppear {
+            stableHabits = viewModel.activeHabits
+        }
+        .onChange(of: viewModel.habits) { oldHabits, newHabits in
+            updateStableHabits(with: newHabits)
         }
         .sheet(item: $statsSheet) { sheet in
             HabitStatsSheet(habitId: sheet.id)
@@ -1051,6 +1058,23 @@ struct BirdsEyeView: View {
         }
     }
     
+    private func updateStableHabits(with newHabits: [Habit]) {
+        let activeNewHabits = newHabits.filter { !$0.isArchived }
+        
+        // 1. Keep existing habits that are still active, in their current order.
+        // Also update their properties (like completion) so the row reflects changes.
+        var updated = stableHabits.compactMap { stable in
+            activeNewHabits.first(where: { $0.id == stable.id })
+        }
+        
+        // 2. Append any truly new habits that weren't in our stable list before.
+        let existingIds = Set(updated.map { $0.id })
+        let trulyNew = activeNewHabits.filter { !existingIds.contains($0.id) }
+        updated.append(contentsOf: trulyNew)
+        
+        stableHabits = updated
+    }
+
     private func weekRangeTitle(weekOffset: Int) -> String {
         let dates = viewModel.weekDates(for: weekOffset)
         guard let start = dates.first, let end = dates.last else { return "Week" }

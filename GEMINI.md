@@ -46,3 +46,4 @@ A proposal has been drafted to align the app with the **Liquid Glass** design sy
 *   **Interactive Physics:** Add surface-tension animations and haptic feedback synchronized with the "liquid" feel of the interface.
 
 *Note: Implementing this roadmap requires bumping the deployment target to iOS 26.0.*
+
