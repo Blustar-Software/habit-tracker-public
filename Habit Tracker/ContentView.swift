@@ -111,11 +111,22 @@ class HabitViewModel: ObservableObject {
         var id: String { rawValue }
     }
     
+    enum StatMode: String, CaseIterable, Identifiable {
+        case allTime = "All-Time"
+        case monthly = "Monthly"
+        var id: String { rawValue }
+    }
+    
     @Published var habits: [Habit] = []
     @Published var reports: [ProgressReport] = []
     @Published var sortOrder: SortOrder {
         didSet {
             UserDefaults.standard.set(sortOrder.rawValue, forKey: "HabitSortOrder")
+        }
+    }
+    @Published var statMode: StatMode {
+        didSet {
+            UserDefaults.standard.set(statMode.rawValue, forKey: "HabitStatMode")
         }
     }
     
@@ -125,6 +136,9 @@ class HabitViewModel: ObservableObject {
     init() {
         let savedSort = UserDefaults.standard.string(forKey: "HabitSortOrder") ?? SortOrder.manual.rawValue
         self.sortOrder = SortOrder(rawValue: savedSort) ?? .manual
+        
+        let savedStat = UserDefaults.standard.string(forKey: "HabitStatMode") ?? StatMode.allTime.rawValue
+        self.statMode = StatMode(rawValue: savedStat) ?? .allTime
         
         loadHabits()
         fileChangeObserver = NotificationCenter.default.publisher(for: HabitFileManager.fileDidChangeNotification)
@@ -598,15 +612,39 @@ class HabitViewModel: ObservableObject {
         case .successRate:
             let now = Date()
             let calendar = Calendar.current
-            let year = calendar.component(.year, from: now)
-            let month = calendar.component(.month, from: now)
             
             return list.sorted { h1, h2 in
-                let p1 = successPercentage(for: h1, year: year, month: month)
-                let p2 = successPercentage(for: h2, year: year, month: month)
+                let p1: Double
+                let p2: Double
+                
+                if self.statMode == .allTime {
+                    p1 = self.successPercentage(for: h1)
+                    p2 = self.successPercentage(for: h2)
+                } else {
+                    let year = calendar.component(.year, from: now)
+                    let month = calendar.component(.month, from: now)
+                    p1 = self.successPercentage(for: h1, year: year, month: month)
+                    p2 = self.successPercentage(for: h2, year: year, month: month)
+                }
+                
                 if p1 != p2 {
                     return p1 > p2
                 }
+                
+                // Tie-breaker
+                if self.statMode == .monthly {
+                    // Previous Month tie-breaker for monthly mode
+                    let prevMonthDate = calendar.date(byAdding: .month, value: -1, to: now)!
+                    let prevYear = calendar.component(.year, from: prevMonthDate)
+                    let prevMonth = calendar.component(.month, from: prevMonthDate)
+                    let prevP1 = self.successPercentage(for: h1, year: prevYear, month: prevMonth)
+                    let prevP2 = self.successPercentage(for: h2, year: prevYear, month: prevMonth)
+                    if prevP1 != prevP2 {
+                        return prevP1 > prevP2
+                    }
+                }
+                
+                // Final fallback
                 return h1.createdAt < h2.createdAt
             }
         }
@@ -940,9 +978,31 @@ struct ContentView: View {
                     }
 
                     Menu {
-                        Picker("Sort Order", selection: $viewModel.sortOrder) {
-                            ForEach(HabitViewModel.SortOrder.allCases) { order in
-                                Text(order.rawValue).tag(order)
+                        Section("SORT BY") {
+                            Button {
+                                viewModel.sortOrder = .manual
+                            } label: {
+                                Label("Manual Order", systemImage: viewModel.sortOrder == .manual ? "checkmark.circle.fill" : "hand.tap")
+                            }
+                            
+                            Button {
+                                viewModel.sortOrder = .successRate
+                            } label: {
+                                Label("Success Rate", systemImage: viewModel.sortOrder == .successRate ? "checkmark.circle.fill" : "arrow.up.arrow.down")
+                            }
+                        }
+                        
+                        Section("STATISTICS MODE") {
+                            Button {
+                                viewModel.statMode = .allTime
+                            } label: {
+                                Label("All-Time", systemImage: viewModel.statMode == .allTime ? "checkmark.circle.fill" : "infinity")
+                            }
+                            
+                            Button {
+                                viewModel.statMode = .monthly
+                            } label: {
+                                Label("Monthly", systemImage: viewModel.statMode == .monthly ? "checkmark.circle.fill" : "calendar")
                             }
                         }
                     } label: {
@@ -1537,6 +1597,7 @@ struct HabitStatsSheet: View {
 struct ReportsListView: View {
     @EnvironmentObject var viewModel: HabitViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showingInfoSheet = false
     
     var body: some View {
         NavigationView {
@@ -1564,12 +1625,80 @@ struct ReportsListView: View {
             }
             .navigationTitle("Progress Reports")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingInfoSheet = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
                 }
             }
+            .sheet(isPresented: $showingInfoSheet) {
+                ReportsInfoSheet()
+            }
+        }
+    }
+}
+
+struct ReportsInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    SectionView(title: "Statistics Modes", icon: "chart.bar.fill", color: .blue) {
+                        Text("You can toggle between **All-Time** and **Monthly** statistics in the main view's options menu.")
+                        Text("• **All-Time**: Shows success rate across the entire history of the habit.")
+                        Text("• **Monthly**: Focuses on the current calendar month for a fresh start.")
+                    }
+                    
+                    SectionView(title: "Smart Sorting", icon: "arrow.up.arrow.down", color: .orange) {
+                        Text("In Monthly mode, the app uses **Hybrid Stability** sorting. If two habits are tied this month, it uses last month's performance as a tie-breaker so your list stays stable.")
+                    }
+                    
+                    SectionView(title: "Automated Reports", icon: "doc.text.fill", color: .green) {
+                        Text("Reports are generated automatically:")
+                        Text("• **Weekly**: Every Monday morning for the previous week.")
+                        Text("• **Monthly**: On the 1st of every month.")
+                        Text("• **Catch-up**: If you haven't opened the app in a while, it will generate separate reports for every week or month you missed.")
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Guide")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+struct SectionView<Content: View>: View {
+    let title: String
+    let icon: String
+    let color: Color
+    @ViewBuilder let content: () -> Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+                .foregroundColor(color)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                content()
+            }
+            .font(.subheadline)
+            .foregroundColor(.secondary)
         }
     }
 }
@@ -1644,7 +1773,23 @@ struct MainHabitRow: View {
     let onShowNotes: () -> Void
     
     var body: some View {
-        HStack {
+        let now = Date()
+        let calendar = Calendar.current
+        
+        let hasMarks: Bool
+        let pct: Double
+        
+        if viewModel.statMode == .allTime {
+            hasMarks = !habit.completion.isEmpty
+            pct = viewModel.successPercentage(for: habit)
+        } else {
+            let year = calendar.component(.year, from: now)
+            let month = calendar.component(.month, from: now)
+            hasMarks = viewModel.hasMarks(for: habit, year: year, month: month)
+            pct = viewModel.successPercentage(for: habit, year: year, month: month)
+        }
+        
+        return HStack {
             Text(habit.name)
             if habit.isArchived {
                 Text("Archived")
@@ -1682,18 +1827,11 @@ struct MainHabitRow: View {
                 )
                 .foregroundColor(.white)
             
-            let now = Date()
-            let calendar = Calendar.current
-            let year = calendar.component(.year, from: now)
-            let month = calendar.component(.month, from: now)
-            
-            let hasMonthlyMarks = viewModel.hasMarks(for: habit, year: year, month: month)
-            let pct = viewModel.successPercentage(for: habit, year: year, month: month)
-            let pctText = hasMonthlyMarks ? String(format: "%.0f%%", pct) : "–"
-            let pctColor: Color = hasMonthlyMarks ? (pct < 34 ? .red : (pct < 67 ? .yellow : .green)) : .gray
+            let pctText = hasMarks ? String(format: "%.0f%%", pct) : "–"
+            let pctColor: Color = hasMarks ? (pct < 34 ? .red : (pct < 67 ? .yellow : .green)) : .gray
             Text(pctText)
                 .foregroundColor(pctColor)
-                .frame(width: 50, alignment: hasMonthlyMarks ? .trailing : .center)
+                .frame(width: 50, alignment: hasMarks ? .trailing : .center)
         }
     }
 }

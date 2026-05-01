@@ -7,8 +7,8 @@ Blustar Software – Habit Tracker
 Overview
 
 Habit Tracker is an intuitive iOS application designed to help users build and maintain positive habits. With a clean interface, users can easily add, track, and manage their daily habits. 
-Key features include a detailed calendar view for tracking daily completion, a dynamic streak indicator to motivate progress, and monthly success percentages that provide at-a-glance performance insights. 
-The app supports habit reordering, advanced sorting (by monthly success), bulk management (archive, restore, delete), and provides subtle haptic and sound feedback for a satisfying user experience.
+Key features include a detailed calendar view for tracking daily completion, a dynamic streak indicator to motivate progress, and customizable success percentages (choose between All-Time or Monthly focus). 
+The app supports habit reordering, advanced sorting, automated progress reports, and provides subtle haptic and sound feedback for a satisfying user experience.
 
 ⸻
 
@@ -33,9 +33,10 @@ Habit data is stored in a user-selected `habits.json` file. You can keep it in i
 
 New in v1.1.2
 
-- **Progress Reports:** Automatically generates weekly (every Monday) and monthly (1st of the month) summaries of your performance. If you miss any period, separate reports are generated for each missed week or month to ensure complete historical tracking.
-- **Monthly Statistics Focus:** The main view, bird's-eye view, and sorting logic now prioritize current-month performance to encourage fresh starts and consistent progress.
-- **Dynamic Detail Stats:** The statistics section in the Detail view now automatically calculates success rates based on the month currently being viewed in the calendar.
+- **Stat Mode Toggle:** Choose between **All-Time** or **Monthly** statistics in the view options menu. The entire app (including sorting) adapts to your preference.
+- **Progress Reports:** Automatically generates weekly (every Monday) and monthly (1st of the month) summaries. If you miss any period, separate reports are generated for each missed week or month.
+- **In-app Guide:** A new informational guide accessible from the Reports view explains the app's smart logic and statistics.
+- **Hybrid Stability Sorting:** In Monthly mode, sorting uses last month's data as a tie-breaker for a stable experience during month transitions.
 - **Color-Coded Streaks:** Habit streaks are now visually distinguished (Green for active, Red for broken) for immediate status recognition.
 
 New in v1.1.1
@@ -59,16 +60,22 @@ Usage
    - In the calendar view, tap a day to mark it as completed (green circle), unsuccessful (red circle), or unmarked (gray circle).
    - The current day is highlighted with a yellow ring.
 
-**3. Sorting and Filtering:**
-   - **Filter:** Use the segmented picker at the top to view Active, Archived, or All habits.
-   - **Sort:** Tap the sort icon (up/down arrows) in the toolbar to switch between Manual (custom order) and Sorted (monthly success rate) views.
+**3. View Options (Sort & Stats):**
+   - Tap the **View Options** icon (up/down arrows) in the toolbar.
+   - **Sort By:** Toggle between Manual (custom order) and Sorted (by success rate).
+   - **Stat Mode:** Toggle between All-Time (lifetime history) and Monthly (current calendar month).
 
-**4. Bulk Management (Edit Mode):**
+**4. Progress Reports & Guide:**
+   - Tap the **Reports** icon (document with magnifying glass) to view your performance history.
+   - Look for the red badge indicating new, unread reports.
+   - Inside the Reports view, tap the **Info** button to read the guide on how the app calculates data.
+
+**5. Bulk Management (Edit Mode):**
    - Tap 'Edit' to enter selection mode.
    - Use 'Select All' in the top-left to manage your entire list at once.
    - Access the 'Actions' (ellipsis) menu to Archive, Restore, Reset, or Delete selected habits. The menu intelligently shows only valid actions for your selection.
 
-**5. Bird's-Eye View:**
+**6. Bird's-Eye View:**
    - Tap the bird icon to see a high-level view of your week's progress across all habits. 
    - Tap any dot to quickly toggle completion status without leaving the view.
 

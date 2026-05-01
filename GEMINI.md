@@ -7,12 +7,12 @@ This is an iOS Habit Tracker application written in Swift using the SwiftUI fram
 *   **Habit Tracking:** Users can add, rename, and delete habits.
 *   **Calendar View:** A detailed calendar view to mark habits as completed, unsuccessful, or unmarked for each day.
 *   **Streak Counter:** A visual indicator to show the current streak for each habit, color-coded for quick status checks.
-*   **Success Percentage:** Calculates and displays the monthly success rate for each habit (current month on main view, dynamic month in details).
-*   **Progress Reports:** Generates automated weekly, monthly, and catch-up reports with success breakdowns and focus areas.
-*   **Data Persistence:** Habit data is stored locally using `UserDefaults`.
+*   **Success Percentage:** Customizable metrics showing either All-Time or Monthly success rates across the app.
+*   **Progress Reports:** Automated weekly (Monday) and monthly (1st) performance summaries with a built-in informational guide.
+*   **Data Persistence:** Consolidated `HabitData` structure (habits and reports) stored in a user-selected JSON file via `HabitFileManager`.
 *   **User Feedback:** The app provides haptic and sound feedback for various user interactions.
 
-The project follows a Model-View-ViewModel (MVVM) architecture, with `ContentView` and `HabitDetailView` as the Views, `Habit` as the Model, and `HabitViewModel` as the ViewModel.
+The project follows a Model-View-ViewModel (MVVM) architecture, with `ContentView`, `HabitDetailView`, `BirdsEyeView`, and `ReportsListView` as the primary Views.
 
 ## Building and Running
 
