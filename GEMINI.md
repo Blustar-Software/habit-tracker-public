@@ -8,6 +8,7 @@ This is an iOS Habit Tracker application written in Swift using the SwiftUI fram
 *   **Calendar View:** A detailed calendar view to mark habits as completed, unsuccessful, or unmarked for each day.
 *   **Streak Counter:** A visual indicator to show the current streak for each habit, color-coded for quick status checks.
 *   **Success Percentage:** Calculates and displays the monthly success rate for each habit (current month on main view, dynamic month in details).
+*   **Progress Reports:** Generates automated weekly, monthly, and catch-up reports with success breakdowns and focus areas.
 *   **Data Persistence:** Habit data is stored locally using `UserDefaults`.
 *   **User Feedback:** The app provides haptic and sound feedback for various user interactions.
 

@@ -207,7 +207,7 @@ class HabitFileManager: NSObject, ObservableObject {
     
     // MARK: - File Operations
     
-    func saveHabits(_ habits: [Habit]) {
+    func saveHabitData(_ data: HabitData) {
         guard let url = fileURL else {
             handleFileAccessError()
             return
@@ -223,7 +223,7 @@ class HabitFileManager: NSObject, ObservableObject {
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
-            let data = try encoder.encode(habits)
+            let data = try encoder.encode(data)
             try data.write(to: url, options: .atomic)
             refreshLastKnownModificationDate(for: url)
         } catch {
@@ -232,31 +232,51 @@ class HabitFileManager: NSObject, ObservableObject {
         }
     }
     
-    func loadHabits() -> [Habit] {
+    func loadHabitData() -> HabitData {
         guard let url = fileURL else {
             handleFileAccessError()
-            return []
+            return HabitData()
         }
         
         // Check if file still exists and is accessible
         guard FileManager.default.fileExists(atPath: url.path) else {
             print("File no longer exists at path")
             handleFileAccessError()
-            return []
+            return HabitData()
         }
         
         do {
             let data = try Data(contentsOf: url)
             let decoder = JSONDecoder()
-            let habits = try decoder.decode([Habit].self, from: data)
-            refreshLastKnownModificationDate(for: url)
-            return habits
+            
+            // Try decoding as HabitData first
+            if let habitData = try? decoder.decode(HabitData.self, from: data) {
+                refreshLastKnownModificationDate(for: url)
+                return habitData
+            }
+            
+            // Fallback for older files which only had [Habit]
+            if let habits = try? decoder.decode([Habit].self, from: data) {
+                refreshLastKnownModificationDate(for: url)
+                return HabitData(habits: habits, reports: [])
+            }
+            
+            return HabitData()
         } catch {
             print("Error loading habits: \(error)")
             handleFileAccessError()
-            // If file is corrupted or can't be read, start fresh
-            return []
+            return HabitData()
         }
+    }
+
+    // Deprecated helpers for compatibility with existing code during transition
+    func saveHabits(_ habits: [Habit]) {
+        let currentData = loadHabitData()
+        saveHabitData(HabitData(habits: habits, reports: currentData.reports))
+    }
+    
+    func loadHabits() -> [Habit] {
+        return loadHabitData().habits
     }
     
     private func handleFileAccessError() {

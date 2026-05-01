@@ -56,6 +56,44 @@ struct Habit: Identifiable, Codable, Equatable {
     }
 }
 
+enum ReportType: String, Codable {
+    case weekly = "Weekly"
+    case monthly = "Monthly"
+    case catchUp = "Catch-up"
+}
+
+struct ProgressReport: Identifiable, Codable, Equatable {
+    let id: UUID
+    let type: ReportType
+    let dateRange: String
+    let overallSuccess: Double
+    let generatedAt: Date
+    var isRead: Bool
+    let topHabits: [String] // Names of most successful habits
+    let focusHabits: [String] // Names of least successful habits
+    
+    init(id: UUID = UUID(), type: ReportType, dateRange: String, overallSuccess: Double, generatedAt: Date = Date(), isRead: Bool = false, topHabits: [String], focusHabits: [String]) {
+        self.id = id
+        self.type = type
+        self.dateRange = dateRange
+        self.overallSuccess = overallSuccess
+        self.generatedAt = generatedAt
+        self.isRead = isRead
+        self.topHabits = topHabits
+        self.focusHabits = focusHabits
+    }
+}
+
+struct HabitData: Codable {
+    var habits: [Habit]
+    var reports: [ProgressReport]
+    
+    init(habits: [Habit] = [], reports: [ProgressReport] = []) {
+        self.habits = habits
+        self.reports = reports
+    }
+}
+
 struct NotesSheetContext: Identifiable {
     let id: UUID
     let title: String
@@ -74,6 +112,7 @@ class HabitViewModel: ObservableObject {
     }
     
     @Published var habits: [Habit] = []
+    @Published var reports: [ProgressReport] = []
     @Published var sortOrder: SortOrder {
         didSet {
             UserDefaults.standard.set(sortOrder.rawValue, forKey: "HabitSortOrder")
@@ -93,6 +132,9 @@ class HabitViewModel: ObservableObject {
             .sink { [weak self] _ in
                 self?.loadHabits()
             }
+            
+        // Check for reports on init
+        checkAndGenerateReports()
     }
     
     func addHabit(name: String) {
@@ -196,13 +238,152 @@ class HabitViewModel: ObservableObject {
     }
     
     func loadHabits() {
-        habits = fileManager.loadHabits()
+        let data = fileManager.loadHabitData()
+        self.habits = data.habits
+        self.reports = data.reports
     }
     
     func saveHabits() {
-        fileManager.saveHabits(habits)
+        fileManager.saveHabitData(HabitData(habits: habits, reports: reports))
+    }
+
+    func markReportAsRead(id: UUID) {
+        if let index = reports.firstIndex(where: { $0.id == id }) {
+            reports[index].isRead = true
+            saveHabits()
+        }
+    }
+
+    func deleteReport(at offsets: IndexSet) {
+        reports.remove(atOffsets: offsets)
+        saveHabits()
     }
     
+    // MARK: - Report Generation Logic
+    
+    private func checkAndGenerateReports() {
+        let now = Date()
+        let calendar = Calendar.current
+        
+        // 1. Identify the baseline date
+        // If no reports exist, we consider 1 month ago as the baseline.
+        let lastReportDate = reports.map { $0.generatedAt }.max() ?? calendar.date(byAdding: .month, value: -1, to: now)!
+        
+        var generatedAny = false
+        var checkDate = calendar.startOfDay(for: lastReportDate)
+        let endDay = calendar.startOfDay(for: now)
+        
+        // Step forward day by day from last report date to today
+        while checkDate < endDay {
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: checkDate) else { break }
+            checkDate = nextDay
+            
+            let components = calendar.dateComponents([.weekday, .day], from: checkDate)
+            
+            // Monthly check: If checkDate is the 1st of a month
+            if components.day == 1 {
+                let prevMonthDate = calendar.date(byAdding: .month, value: -1, to: checkDate)!
+                let prevMonthComps = calendar.dateComponents([.year, .month], from: prevMonthDate)
+                if generateMonthlyReport(for: prevMonthComps.month!, year: prevMonthComps.year!) {
+                    generatedAny = true
+                }
+            }
+            
+            // Weekly check: If checkDate is a Monday
+            if components.weekday == 2 {
+                let startOfLastWeek = calendar.date(byAdding: .day, value: -7, to: checkDate)!
+                if generateWeeklyReport(from: startOfLastWeek, to: checkDate) {
+                    generatedAny = true
+                }
+            }
+        }
+        
+        if generatedAny {
+            saveHabits()
+        }
+    }
+    
+    private func generateWeeklyReport(from start: Date, to end: Date) -> Bool {
+        let df = DateFormatter()
+        df.dateFormat = "MMM d"
+        let rangeString = "\(df.string(from: start)) – \(df.string(from: end))"
+        return createReport(type: .weekly, start: start, end: end, rangeString: rangeString)
+    }
+    
+    private func generateMonthlyReport(for month: Int, year: Int) -> Bool {
+        let calendar = Calendar.current
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        comps.day = 1
+        guard let startOfMonth = calendar.date(from: comps),
+              let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth) else { return false }
+        
+        let df = DateFormatter()
+        df.setLocalizedDateFormatFromTemplate("MMMM yyyy")
+        let rangeString = df.string(from: startOfMonth)
+        
+        return createReport(type: .monthly, start: startOfMonth, end: endOfMonth, rangeString: rangeString)
+    }
+    
+    private func createReport(type: ReportType, start: Date, end: Date, rangeString: String) -> Bool {
+        let habitsToAnalyze = habits.filter { !$0.isArchived || $0.completion.values.contains(true) }
+        guard !habitsToAnalyze.isEmpty else { return false }
+        
+        var totalMarks = 0
+        var successMarks = 0
+        
+        struct HabitStat {
+            let name: String
+            let pct: Double
+        }
+        var habitStats: [HabitStat] = []
+        
+        for habit in habitsToAnalyze {
+            let filtered = filterCompletion(habit.completion, from: start, to: end)
+            let total = filtered.count
+            if total > 0 {
+                let success = filtered.filter { $0.value == true }.count
+                totalMarks += total
+                successMarks += success
+                habitStats.append(HabitStat(name: habit.name, pct: Double(success) / Double(total)))
+            }
+        }
+        
+        guard totalMarks > 0 else { return false }
+        
+        let overall = (Double(successMarks) / Double(totalMarks)) * 100.0
+        let sorted = habitStats.sorted { $0.pct > $1.pct }
+        
+        let top = Array(sorted.prefix(3)).map { $0.name }
+        let focus = Array(sorted.suffix(3).reversed()).filter { stat in !top.contains(stat.name) }.map { $0.name }
+        
+        let report = ProgressReport(
+            type: type,
+            dateRange: rangeString,
+            overallSuccess: overall,
+            topHabits: top,
+            focusHabits: focus
+        )
+        
+        reports.insert(report, at: 0)
+        return true
+    }
+    
+    private func filterCompletion(_ completion: [String: Bool], from start: Date, to end: Date) -> [String: Bool] {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let calendar = Calendar.current
+        let startDay = calendar.startOfDay(for: start)
+        let endDay = calendar.startOfDay(for: end)
+        
+        return completion.filter { key, _ in
+            guard let date = df.date(from: key) else { return false }
+            let day = calendar.startOfDay(for: date)
+            return day >= startDay && day <= endDay
+        }
+    }
+
     func successPercentage(for habit: Habit) -> Double {
         let marked = habit.completion.values
         let total = marked.count
@@ -501,6 +682,7 @@ struct ContentView: View {
     @State private var showingResetSelectionConfirmation = false
     @State private var showingBulkArchiveConfirmation = false
     @State private var showingBulkRestoreConfirmation = false
+    @State private var showingReportsSheet = false
     
     private var activeSelectedCount: Int {
         viewModel.habits.filter { selection.contains($0.id) && !$0.isArchived }.count
@@ -525,6 +707,10 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingBirdsEyeSheet) {
             BirdsEyeView()
+                .environmentObject(viewModel)
+        }
+        .sheet(isPresented: $showingReportsSheet) {
+            ReportsListView()
                 .environmentObject(viewModel)
         }
         .sheet(item: $notesSheet) { sheet in
@@ -733,6 +919,20 @@ struct ContentView: View {
                     }
                     .disabled(selection.isEmpty)
                 } else {
+                    Button {
+                        showingReportsSheet = true
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "doc.text.magnifyingglass")
+                            if viewModel.reports.contains(where: { !$0.isRead }) {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
+                    }
+
                     Button {
                         showingBirdsEyeSheet = true
                     } label: {
@@ -1330,6 +1530,110 @@ struct HabitStatsSheet: View {
                     }
                 }
             }
+        }
+    }
+}
+
+struct ReportsListView: View {
+    @EnvironmentObject var viewModel: HabitViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(viewModel.reports) { report in
+                    NavigationLink(destination: ReportDetailView(report: report)) {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(report.type.rawValue + " Report")
+                                    .font(.headline)
+                                Text(report.dateRange)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            if !report.isRead {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 8, height: 8)
+                            }
+                        }
+                    }
+                }
+                .onDelete(perform: viewModel.deleteReport)
+            }
+            .navigationTitle("Progress Reports")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct ReportDetailView: View {
+    let report: ProgressReport
+    @EnvironmentObject var viewModel: HabitViewModel
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(report.dateRange)
+                        .font(.title2)
+                        .bold()
+                    Text("\(report.type.rawValue) Summary")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                VStack(alignment: .center, spacing: 12) {
+                    Text("Overall Success")
+                        .font(.headline)
+                    Text(String(format: "%.0f%%", report.overallSuccess))
+                        .font(.system(size: 64, weight: .bold, design: .rounded))
+                        .foregroundColor(report.overallSuccess < 34 ? .red : (report.overallSuccess < 67 ? .yellow : .green))
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(12)
+                
+                if !report.topHabits.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Strongest Habits", systemImage: "star.fill")
+                            .font(.headline)
+                            .foregroundColor(.orange)
+                        
+                        ForEach(report.topHabits, id: \.self) { habit in
+                            Text("• \(habit)")
+                        }
+                    }
+                }
+                
+                if !report.focusHabits.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Needs Focus", systemImage: "exclamationmark.triangle.fill")
+                            .font(.headline)
+                            .foregroundColor(.red)
+                        
+                        ForEach(report.focusHabits, id: \.self) { habit in
+                            Text("• \(habit)")
+                        }
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding()
+        }
+        .navigationTitle(report.type.rawValue + " Report")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            viewModel.markReportAsRead(id: report.id)
         }
     }
 }

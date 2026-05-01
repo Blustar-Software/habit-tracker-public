@@ -33,6 +33,7 @@ Habit data is stored in a user-selected `habits.json` file. You can keep it in i
 
 New in v1.1.2
 
+- **Progress Reports:** Automatically generates weekly (every Monday) and monthly (1st of the month) summaries of your performance. If you miss any period, separate reports are generated for each missed week or month to ensure complete historical tracking.
 - **Monthly Statistics Focus:** The main view, bird's-eye view, and sorting logic now prioritize current-month performance to encourage fresh starts and consistent progress.
 - **Dynamic Detail Stats:** The statistics section in the Detail view now automatically calculates success rates based on the month currently being viewed in the calendar.
 - **Color-Coded Streaks:** Habit streaks are now visually distinguished (Green for active, Red for broken) for immediate status recognition.
