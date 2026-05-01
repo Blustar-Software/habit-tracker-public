@@ -7,8 +7,8 @@ Blustar Software – Habit Tracker
 Overview
 
 Habit Tracker is an intuitive iOS application designed to help users build and maintain positive habits. With a clean interface, users can easily add, track, and manage their daily habits. 
-Key features include a detailed calendar view for tracking daily completion, a dynamic streak indicator to motivate progress, and success percentages that provide at-a-glance performance insights. 
-The app supports habit reordering, advanced sorting, bulk management (archive, restore, delete), and provides subtle haptic and sound feedback for a satisfying user experience.
+Key features include a detailed calendar view for tracking daily completion, a dynamic streak indicator to motivate progress, and monthly success percentages that provide at-a-glance performance insights. 
+The app supports habit reordering, advanced sorting (by monthly success), bulk management (archive, restore, delete), and provides subtle haptic and sound feedback for a satisfying user experience.
 
 ⸻
 
@@ -30,6 +30,12 @@ Installation
 Data Storage
 
 Habit data is stored in a user-selected `habits.json` file. You can keep it in iCloud Drive to sync across devices, and the app will reload when the file changes or is replaced at the same path.
+
+New in v1.1.2
+
+- **Monthly Statistics Focus:** The main view, bird's-eye view, and sorting logic now prioritize current-month performance to encourage fresh starts and consistent progress.
+- **Dynamic Detail Stats:** The statistics section in the Detail view now automatically calculates success rates based on the month currently being viewed in the calendar.
+- **Color-Coded Streaks:** Habit streaks are now visually distinguished (Green for active, Red for broken) for immediate status recognition.
 
 New in v1.1.1
 
@@ -54,7 +60,7 @@ Usage
 
 **3. Sorting and Filtering:**
    - **Filter:** Use the segmented picker at the top to view Active, Archived, or All habits.
-   - **Sort:** Tap the sort icon (up/down arrows) in the toolbar to switch between Manual (custom order) and Sorted (success rate) views.
+   - **Sort:** Tap the sort icon (up/down arrows) in the toolbar to switch between Manual (custom order) and Sorted (monthly success rate) views.
 
 **4. Bulk Management (Edit Mode):**
    - Tap 'Edit' to enter selection mode.

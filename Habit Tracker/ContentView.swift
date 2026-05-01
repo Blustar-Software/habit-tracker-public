@@ -229,6 +229,16 @@ class HabitViewModel: ObservableObject {
         return (Double(successes) / Double(total)) * 100.0
     }
     
+    func hasMarks(for habit: Habit, year: Int, month: Int) -> Bool {
+        return habit.completion.keys.contains { key in
+            let comps = key.split(separator: "-")
+            guard comps.count == 3,
+                  let y = Int(comps[0]),
+                  let m = Int(comps[1]) else { return false }
+            return y == year && m == month
+        }
+    }
+    
     func totalSuccessfulDays(for habit: Habit) -> Int {
         habit.completion.values.filter { $0 == true }.count
     }
@@ -360,6 +370,35 @@ class HabitViewModel: ObservableObject {
         guard total > 0 else { return 0 }
         return (Double(success) / Double(total)) * 100.0
     }
+
+    func monthlySuccessPercentage(monthOffset: Int) -> Double {
+        let calendar = Calendar.current
+        let target = calendar.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date()
+        let comps = calendar.dateComponents([.year, .month], from: target)
+        guard let year = comps.year, let month = comps.month else { return 0 }
+        
+        var total = 0
+        var success = 0
+        
+        for habit in activeHabits {
+            let filtered = habit.completion.filter { (key, value) in
+                let comps = key.split(separator: "-")
+                guard comps.count == 3,
+                      let y = Int(comps[0]),
+                      let m = Int(comps[1]) else { return false }
+                return y == year && m == month
+            }
+            for value in filtered.values {
+                total += 1
+                if value {
+                    success += 1
+                }
+            }
+        }
+        
+        guard total > 0 else { return 0 }
+        return (Double(success) / Double(total)) * 100.0
+    }
     
     var activeHabits: [Habit] {
         let list = habits.filter { !$0.isArchived }
@@ -376,9 +415,14 @@ class HabitViewModel: ObservableObject {
         case .manual:
             return list
         case .successRate:
+            let now = Date()
+            let calendar = Calendar.current
+            let year = calendar.component(.year, from: now)
+            let month = calendar.component(.month, from: now)
+            
             return list.sorted { h1, h2 in
-                let p1 = successPercentage(for: h1)
-                let p2 = successPercentage(for: h2)
+                let p1 = successPercentage(for: h1, year: year, month: month)
+                let p2 = successPercentage(for: h2, year: year, month: month)
                 if p1 != p2 {
                     return p1 > p2
                 }
@@ -901,17 +945,20 @@ struct BirdsEyeView: View {
                 
                 VStack(spacing: 12) {
                     let weekPct = viewModel.weekSuccessPercentage(weekOffset: weekOffset)
+                    let monthPct = viewModel.monthlySuccessPercentage(monthOffset: 0) // Current month
                     let overallPct = viewModel.overallSuccessPercentage()
-                    
+
                     VStack(spacing: 4) {
                         Text(String(format: "All-Time Success: %.0f%%", overallPct))
                             .font(.headline)
                             .foregroundColor(overallPct < 34 ? .red : (overallPct < 67 ? .yellow : .green))
+                        Text(String(format: "Month Success: %.0f%%", monthPct))
+                            .font(.subheadline)
+                            .foregroundColor(monthPct < 34 ? .red : (monthPct < 67 ? .yellow : .green))
                         Text(String(format: "Week Success: %.0f%%", weekPct))
                             .font(.subheadline)
                             .foregroundColor(weekPct < 34 ? .red : (weekPct < 67 ? .yellow : .green))
-                    }
-                    
+                    }                    
                     HStack(spacing: 12) {
                         Button {
                             weekOffset -= 1
@@ -1238,8 +1285,16 @@ struct HabitStatsSheet: View {
         NavigationView {
             VStack(alignment: .leading, spacing: 10) {
                 if let habit = habit {
+                    let now = Date()
+                    let calendar = Calendar.current
+                    let year = calendar.component(.year, from: now)
+                    let month = calendar.component(.month, from: now)
+                    
                     let lifetimePct = viewModel.successPercentage(for: habit)
+                    let monthlyPct = viewModel.successPercentage(for: habit, year: year, month: month)
                     let streak = viewModel.currentStreak(for: habit)
+                    let streakColor: Color = (streak == 0) ? .red : .green
+                    
                     Text(habit.name)
                         .font(.title3)
                         .bold()
@@ -1247,6 +1302,12 @@ struct HabitStatsSheet: View {
                     Text("Current Streak: \(streak) day\(streak == 1 ? "" : "s")")
                         .font(.subheadline)
                         .bold()
+                        .foregroundColor(streakColor)
+                    
+                    Text(String(format: "Success (This Month): %.0f%%", monthlyPct))
+                        .font(.subheadline)
+                        .foregroundColor(monthlyPct < 34 ? .red : (monthlyPct < 67 ? .yellow : .green))
+                        
                     Text(String(format: "Success (All Time): %.0f%%", lifetimePct))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
@@ -1304,9 +1365,9 @@ struct MainHabitRow: View {
             
             let streak = viewModel.currentStreak(for: habit)
             let streakColor: Color = (streak == 0) ? .red : .green
-            let hasMarks = !habit.completion.isEmpty
-            let streakText = hasMarks ? (streak > 99 ? "99+" : "\(streak)") : "–"
-            let streakFill: Color = hasMarks ? streakColor : .gray
+            let hasAnyMarks = !habit.completion.isEmpty
+            let streakText = hasAnyMarks ? (streak > 99 ? "99+" : "\(streak)") : "–"
+            let streakFill: Color = hasAnyMarks ? streakColor : .gray
 
             Text(streakText)
                 .font(.caption)
@@ -1317,12 +1378,18 @@ struct MainHabitRow: View {
                 )
                 .foregroundColor(.white)
             
-            let pct = viewModel.successPercentage(for: habit)
-            let pctText = hasMarks ? String(format: "%.0f%%", pct) : "–"
-            let pctColor: Color = hasMarks ? (pct < 34 ? .red : (pct < 67 ? .yellow : .green)) : .gray
+            let now = Date()
+            let calendar = Calendar.current
+            let year = calendar.component(.year, from: now)
+            let month = calendar.component(.month, from: now)
+            
+            let hasMonthlyMarks = viewModel.hasMarks(for: habit, year: year, month: month)
+            let pct = viewModel.successPercentage(for: habit, year: year, month: month)
+            let pctText = hasMonthlyMarks ? String(format: "%.0f%%", pct) : "–"
+            let pctColor: Color = hasMonthlyMarks ? (pct < 34 ? .red : (pct < 67 ? .yellow : .green)) : .gray
             Text(pctText)
                 .foregroundColor(pctColor)
-                .frame(width: 50, alignment: hasMarks ? .trailing : .center)
+                .frame(width: 50, alignment: hasMonthlyMarks ? .trailing : .center)
         }
     }
 }
@@ -1696,11 +1763,24 @@ struct HabitDetailView: View {
         VStack(alignment: .center, spacing: 6) {
             let lifetimePct = viewModel.successPercentage(for: habit)
             let streak = viewModel.currentStreak(for: habit)
+            let streakColor: Color = (streak == 0) ? .red : .green
+            
+            let now = Date()
+            let targetDate = calendar.date(byAdding: .month, value: monthOffset, to: now) ?? now
+            let year = calendar.component(.year, from: targetDate)
+            let month = calendar.component(.month, from: targetDate)
+            let monthlyPct = viewModel.successPercentage(for: habit, year: year, month: month)
 
             VStack(alignment: .center, spacing: 6) {
                 Text("Current Streak: \(streak) day\(streak == 1 ? "" : "s")")
                     .font(.subheadline)
                     .bold()
+                    .foregroundColor(streakColor)
+                
+                Text(String(format: "Success (Monthly): %.0f%%", monthlyPct))
+                    .font(.subheadline)
+                    .foregroundColor(monthlyPct < 34 ? .red : (monthlyPct < 67 ? .yellow : .green))
+
                 Text(String(format: "Success (All Time): %.0f%%", lifetimePct))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
